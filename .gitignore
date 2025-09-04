@@ -1,0 +1,6 @@
+*obfuscator.go
+*stego.go
+*auth.go
+*.png
+*.json
+.svtea_src

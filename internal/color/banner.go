@@ -1,10 +1,8 @@
-package banner
+package color
 
 import (
-	"UPass/internal/checkterm"
-	"UPass/internal/crt"
+	"bytes"
 	"fmt"
-	"strings"
 )
 
 const (
@@ -22,34 +20,36 @@ const (
 )
 
 var ColorMap = map[rune]string{
-	'█': crt.LightPurple,
-	'╗': crt.NavyBlue,
-	'╔': crt.NavyBlue,
-	'╝': crt.DarkBlue,
-	'╚': crt.DarkBlue,
-	'║': crt.LightBlue,
-	'═': crt.LightBlue,
+	'█': LightPurple,
+	'╗': NavyBlue,
+	'╔': NavyBlue,
+	'╝': DarkBlue,
+	'╚': DarkBlue,
+	'║': LightBlue,
+	'═': LightBlue,
 }
 
 // WelcomeBanner prints the application's welcome banner with or without color formatting.
 func WelcomeBanner() {
-	fmt.Println(SafeColorizeBanner(ColorMap) + crt.Colorize(subtitle, crt.Aqua+crt.Bold))
+	fmt.Println(ColorizeBanner(ColorMap) + ApplyColor(subtitle, Aqua+Bold))
 }
 
 // SafeColorizeBanner returns a banner with or without colors.
-func SafeColorizeBanner(colorMap map[rune]string) string {
-	if !checkterm.ColorSupported {
+func ColorizeBanner(colorMap map[rune]string) string {
+	if !IsColorSupported() {
 		return banner
 	}
 
-	var result strings.Builder
-	for _, char := range banner {
-		if color, exists := colorMap[char]; exists {
-			result.WriteString(color + string(char))
-		} else {
-			result.WriteString(string(char))
+	var result bytes.Buffer
+	result.Grow(len(banner) * 4)
+
+	for _, r := range banner {
+		if color, ok := colorMap[r]; ok {
+			result.WriteString(color)
 		}
+		result.WriteRune(r)
 	}
-	result.WriteString(crt.Reset)
+	result.WriteString(Reset)
+
 	return result.String()
 }
