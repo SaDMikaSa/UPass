@@ -1,6 +1,6 @@
 *obfuscator.go
-*stego.go
 *auth.go
+*inputdata.go
+*configmanage.go
+*steganography.go
 *.png
-*.json
-.svtea_src

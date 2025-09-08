@@ -1,10 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"os"
 
+	"github.com/SaDMikaSa/UPass/cmd/app"
 	"github.com/SaDMikaSa/UPass/config/configmanage"
-	"github.com/SaDMikaSa/UPass/config/inputdata"
+	"github.com/SaDMikaSa/UPass/internal/auth"
 	"github.com/SaDMikaSa/UPass/internal/color"
 )
 
@@ -12,13 +14,20 @@ func main() {
 	color.Init()
 	color.WelcomeBanner()
 
-	cfg, err := configmanage.InitializeConfig()
+	_, err := configmanage.InitializeConfig()
 	if err != nil {
-		fmt.Errorf("failed to initialize config: %w", err)
+		log.Printf("Failed to initialize config: %v", err)
+		os.Exit(1)
+	}
+	IsAutarization, err := auth.IsAuthenticated()
+	if err != nil {
+		log.Printf("Failed to authenticate: %v", err)
+	}
+	if IsAutarization {
+		color.PrintSuccess("Authenticated successfully ")
+		app.RunApp()
+	} else {
+		color.PrintRejected("Authentication failed. Please try again.")
 	}
 
-	// Показываем информацию о конфигурации
-	inputdata.PrintConfigInfo(cfg)
-
-	color.PrintInfo("Application is ready to use!")
 }

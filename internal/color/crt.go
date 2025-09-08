@@ -27,8 +27,8 @@ const (
 	// Messages
 	enterPromt   = "Enter "
 	arrow        = " --> "
-	rejectLabel  = "REJECTED: "
-	successLabel = "SUCCESS"
+	rejectLabel  = "✗  REJECTED: "
+	successLabel = "✓  SUCCESS: "
 )
 
 // applyColor applies color to text supported by the terminal.
@@ -55,6 +55,6 @@ func PrintRejected(text string) {
 }
 
 // Success prints success message.
-func PrintSuccess() {
-	fmt.Println(ApplyColor(successLabel, SuccessColor))
+func PrintSuccess(text string) {
+	fmt.Println(ApplyColor(successLabel+text, SuccessColor))
 }
