@@ -27,7 +27,7 @@ func main() {
 		color.PrintSuccess("Authenticated successfully ")
 		app.RunApp()
 	} else {
-		color.PrintRejected("Authentication failed. Please try again.")
+		color.PrintRejected("Too many failed attempts. Please restart the application.")
 	}
 
 }

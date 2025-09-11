@@ -4,3 +4,4 @@
 *configmanage.go
 *steganography.go
 *.png
+*wordcrypto.go

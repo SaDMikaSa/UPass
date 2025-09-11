@@ -18,10 +18,11 @@ const (
 	addOp       = "3. Add record"
 	changeOp    = "4. Change record"
 	deleteOp    = "5. Delete record"
+	upassOp     = "6. Change {{UPass}}"
 	exitOp      = "0. Exit"
 	forkMessage = "Please select an option:"
 	waitTime    = 2 * time.Second
-	maxItem     = 5
+	maxItem     = 6
 )
 
 // MenuItem represents a menu item with its associated handler function.
@@ -33,11 +34,12 @@ type MenuItem struct {
 
 // menuItems is the list of available menu options with their handlers.
 var menuItems = []MenuItem{
-	{1, createOp, createData},
-	{2, getOp, getData},
-	{3, addOp, addData},
-	{4, changeOp, changeData},
-	{5, deleteOp, deleteData},
+	{1, createOp, createRecord},
+	{2, getOp, getRecord},
+	{3, addOp, addRecord},
+	{4, changeOp, changeRecord},
+	{5, deleteOp, deleteRecord},
+	{6, upassOp, changeUPass},
 	{0, exitOp, exit},
 }
 
@@ -130,7 +132,7 @@ func handleUserChoice(choice int) error {
 // isRepeated checks if the user wants to continue using the application.
 func isRepeated(reader *bufio.Reader) (bool, error) {
 
-	color.PrintInfo("Something ele?")
+	color.PrintInfo("Something else?")
 	color.PrintPrompts("[yes] or [no]")
 
 	input, err := reader.ReadString('\n')
