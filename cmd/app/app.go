@@ -15,28 +15,28 @@ import (
 const (
 	createOp    = "1. Create record"
 	getOp       = "2. Get record"
-	addOp       = "3. Add record"
+	listOp      = "3. Add record"
 	changeOp    = "4. Change record"
 	deleteOp    = "5. Delete record"
 	upassOp     = "6. Change {{UPass}}"
 	exitOp      = "0. Exit"
 	forkMessage = "Please select an option:"
 	waitTime    = 2 * time.Second
-	maxItem     = 6
+	maxItem     = 6 // the current maximum value of the option.
 )
 
 // MenuItem represents a menu item with its associated handler function.
 type MenuItem struct {
-	ID      int
-	Text    string
-	Handler func()
+	OptionNumber int
+	Text         string
+	Handler      func() error
 }
 
 // menuItems is the list of available menu options with their handlers.
 var menuItems = []MenuItem{
 	{1, createOp, createRecord},
 	{2, getOp, getRecord},
-	{3, addOp, addRecord},
+	{3, listOp, addRecord},
 	{4, changeOp, changeRecord},
 	{5, deleteOp, deleteRecord},
 	{6, upassOp, changeUPass},
@@ -45,7 +45,12 @@ var menuItems = []MenuItem{
 
 // RunApp starts and runs the application's main loop.
 // It handles menu display, user input processing, and workflow control.
-func RunApp() {
+func RunApp() error {
+	if err := InitStorage(); err != nil {
+		return fmt.Errorf("failed to initialize storage: %w", err)
+	}
+	defer storageManager.Close()
+
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -77,6 +82,7 @@ func RunApp() {
 			break
 		}
 	}
+	return nil
 }
 
 // printMenu displays the application menu using colored output.
@@ -117,9 +123,9 @@ func readUserInput(reader *bufio.Reader) (int, error) {
 // Returns error if selected option doesn't exist.
 func handleUserChoice(choice int) error {
 
-	menuMap := make(map[int]func())
+	menuMap := make(map[int]func() error)
 	for _, item := range menuItems {
-		menuMap[item.ID] = item.Handler
+		menuMap[item.OptionNumber] = item.Handler
 	}
 
 	if handler, exists := menuMap[choice]; exists {
@@ -140,7 +146,7 @@ func isRepeated(reader *bufio.Reader) (bool, error) {
 		return false, fmt.Errorf("failed to read input: %w", err)
 	}
 
-	switch strings.ToLower(strings.TrimSpace(input)) {
+	switch strings.TrimSpace(strings.ToLower(input)) {
 	case "y", "yes", "нуы", "н", "д":
 		return true, nil
 	default:

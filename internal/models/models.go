@@ -21,9 +21,3 @@ func DefaultsConfig() *Config {
 		EncryptionSalt:  "",
 	}
 }
-
-type Record struct {
-	URL      string `json:"url"`
-	Login    string `json:"login"`
-	Password string `json:"password"`
-}
