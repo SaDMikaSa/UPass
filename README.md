@@ -1,0 +1,116 @@
+# UPass
+
+A secure, local-first password manager for the command line.
+
+## Why UPass?
+
+- 🔑 **Recovery Key** — Forgot your master password? No problem. A unique feature among open-source CLI managers.
+- 🛡️ **Built-in Health Check** — Audit weak, duplicate, and breached (HIBP) passwords with k-anonymity.
+- 💾 **Auto-backups** — Every save automatically creates a versioned backup. No Git required.
+- ⚡ **Single Binary** — No GPG, no Node.js, no background daemon, no cloud dependency.
+- 👁️ **Privacy-first** — Everything stays encrypted on your local machine.
+- 📋 **Clipboard Support** — Passwords are copied to clipboard, never displayed in plain text by default.
+- 🏷️ **Multiple Accounts** — Use tags for the same service: `github:work`, `github:personal`.
+- 🐚 **Smart Auto-completion** — Native support for Bash, Zsh, and Fish with automatic PATH and config setup.
+- 🎲 **Interactive Generation** — Refine generated passwords on the fly by dynamically excluding unwanted characters.
+
+## Install
+
+```bash
+# 1. Clone and build
+git clone https://github.com/SaDMikaSa/UPass.git
+cd UPass
+go build -o upass .
+
+# 2. (Optional but recommended) Move to your local bin
+cp upass ~/.local/bin/
+
+# 3. Auto-configure shell completion and PATH
+# (Supports Bash, Zsh, and Fish. Run this from the shell you want to configure)
+./upass completion install
+```
+
+## Quick Start
+
+```bash
+# Initialize your vault
+upass init
+# Enter master password
+# Scan the QR code or save the recovery key shown on screen
+
+# Add a password interactively
+upass add
+# Input service: github
+# Input login: user@email.com
+# Input password: ********
+
+# Add with auto-generated password (press Enter to keep, or type chars to exclude)
+upass add -g
+# Input service: reddit
+# Input login: user123
+# Generated password: xK9#mP2$vL5nQ8@rT4
+# Enter forbidden characters (e.g., O0l1, or "O 0" to forbid spaces), or Enter to keep:
+
+# Multiple accounts for same service
+upass add github:work
+upass add github:personal
+
+# Get a password (copies to clipboard)
+upass get github
+
+# Show password in terminal (use carefully)
+upass get github -s
+
+# List all services
+upass list
+
+# Search services, logins, and notes
+upass search git
+upass search user@email.com --login
+upass search "work account" --note
+
+# Edit a record (leave fields empty to keep current values, supports renaming)
+upass edit github
+
+# Delete a record
+upass delete reddit
+
+# Check password health
+upass health
+# Skip online breach check (fully offline mode)
+upass health --no-h and HIBP
+
+# Manage backups
+upass backup list
+upass backup create
+upass backup restore 2
+
+# Generate a password
+upass generate
+upass generate -l 32 --no-symbols
+```
+
+## Recovery
+
+When you create a vault, UPass generates a random 256-bit recovery key. This key encrypts your master password and is stored in the vault header (`EncryptedMasterPass`). The recovery key is shown as a base64 string — **this is the only time it will be displayed.**
+
+### Storage Recommendations
+
+- Write the recovery key on paper, store in a safe
+- Do NOT store it in:
+  - Plain text files on your computer
+  - Cloud notes (Google Keep, Notion, etc.)
+  - Password managers (circular dependency!)
+  - Email or messaging apps
+
+## Health
+
+How it works:
+
+1. Your password is hashed with SHA-1 locally
+2. Only the first 5 characters of the hash are sent over the network
+3. The server returns all known hash suffixes with that prefix
+4. UPass checks if your hash suffix appears in the response
+
+The server cannot determine your password from the prefix alone (1M+ possible prefixes, ~500 suffixes per prefix).
+Use `upass health --no-hibp` to skip the online check.
