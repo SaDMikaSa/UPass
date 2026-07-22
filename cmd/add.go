@@ -15,10 +15,9 @@ var addGenerate bool
 var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add a new record",
-	Long: `Add a new password record to the vault.
-		For multiple accounts on the same service, use 'service:tag':
-  		upass add github:work
-  		upass add github:personal`,
+	Long: `Add a new password record to the vault. For multiple accounts on the same service, use 'service:tag':
+	upass add github:work
+	upass add github:personal`,
 
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -97,7 +96,11 @@ func inputService(generate bool, args ...string) (domain.Record, error) {
 
 	var password []byte
 	if generate {
-		password = interactiveGenerate()
+		password, err = interactiveGenerate()
+		if err != nil {
+			return record, err
+		}
+
 		if password == nil {
 			return record, fmt.Errorf("password generation cancelled")
 		}
@@ -127,9 +130,9 @@ func inputService(generate bool, args ...string) (domain.Record, error) {
 	}
 
 	if note != "" {
-		fmt.Printf("| Service: %s | Login: %s | Note: %s |\n", service, login, note)
+		fmt.Println(common.Cyan("| Service: %s | Login: %s | Note: %s |", service, login, note))
 	} else {
-		fmt.Printf("| Service: %s | Login: %s |\n", service, login)
+		fmt.Println(common.Cyan("| Service: %s | Login: %s |", service, login))
 	}
 
 	fmt.Print("Confirm? (y/n): ")

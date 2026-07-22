@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bufio"
-	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -85,53 +84,4 @@ func saveServicesCache(services []string) {
 
 	os.MkdirAll(filepath.Dir(cachePath), 0700)
 	os.WriteFile(cachePath, []byte(data), 0600)
-}
-
-// tmpDelete performs a best-effort secure deletion of a file.
-// It overwrites the file with cryptographically secure random data,
-// then with zeros, forcing a disk sync after each pass before removal.
-func tmpDelete(path string) error {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	size := info.Size()
-	if size == 0 {
-		return os.Remove(path)
-	}
-
-	f, err := os.OpenFile(path, os.O_RDWR, 0600)
-	if err != nil {
-		_ = os.Remove(path)
-		return err
-	}
-	defer f.Close()
-
-	randomData := make([]byte, size)
-	if _, err := rand.Read(randomData); err == nil {
-		if _, err := f.WriteAt(randomData, 0); err != nil {
-			_ = os.Remove(path)
-			return err
-		}
-		if err := f.Sync(); err != nil {
-			_ = os.Remove(path)
-			return err
-		}
-	}
-
-	zeroData := make([]byte, size)
-	if _, err := f.WriteAt(zeroData, 0); err != nil {
-		_ = os.Remove(path)
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = os.Remove(path)
-		return err
-	}
-
-	return os.Remove(path)
 }

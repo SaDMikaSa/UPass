@@ -59,10 +59,9 @@ var backupRestoreCmd = &cobra.Command{
 	Use:   "restore <backup-number>",
 	Short: "Restore vault from a backup",
 	Long: `Restore the vault from a specific backup.
-		   A pre-restore backup of the current vault will be saved automatically.`,
+A pre-restore backup of the current vault will be saved automatically.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// 1. ЗАПРОС МАСТЕР-ПАРОЛЯ (Добавлено)
 		password, err := unlock()
 		if err != nil {
 			return err
@@ -108,8 +107,11 @@ var backupRestoreCmd = &cobra.Command{
 			return fmt.Errorf("restore backup: %w", err)
 		}
 
-		fmt.Println()
-		fmt.Println(common.Green("Vault restored successfully!"))
+		if err := vaultService.Unlock(password); err != nil {
+			return fmt.Errorf("vault restored on disk, but failed to unlock it with current password: %w. You may need to use 'upass recover'", err)
+		}
+
+		fmt.Println(common.Green("Vault restored and reloaded successfully!"))
 		return nil
 	},
 }

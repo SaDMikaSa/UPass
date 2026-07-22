@@ -3,9 +3,6 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
-	"time"
 
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/nbutton23/zxcvbn-go"
@@ -16,10 +13,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new vault",
-	Long: `Create a new encrypted vault with a recovery key.
-		The recovery key is displayed as a QR code and temporarily saved to a file.
-		The file is overwritten and removed after 60 seconds.
-		Scan the QR code or copy the file before it's removed.`,
+	Long:  `Create a new encrypted vault with a recovery key. The recovery key is displayed as a QR code and a base64 string. Save it immediately. It will not be shown again.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := inputPass("Enter master password: ")
 		if err != nil {
@@ -30,7 +24,7 @@ var initCmd = &cobra.Command{
 		strength := zxcvbn.PasswordStrength(string(password), nil)
 		if strength.Score < common.MinStrengthScore {
 			fmt.Println(common.Yellow("⚠️  Weak password (score: %d/4, crack time: %s)", strength.Score, strength.CrackTimeDisplay))
-			fmt.Print("Continue anyway? [y/n]: ")
+			fmt.Print("Continue anyway? (y/n): ")
 			if !readConfirmation() {
 				fmt.Println(common.Red("Cancelled"))
 				return nil
@@ -52,63 +46,25 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("init: %w", err)
 		}
 
-		tmpFile, err := saveRecoveryKeyTemp(recoveryKey)
-		if err != nil {
-			fmt.Println(common.Red("Failed to create temp file: %v", err))
-			showRecoveryQR(recoveryKey)
-			fmt.Println(common.Yellow("Recovery key: %s", recoveryKey))
-			return nil
-		}
-
 		showRecoveryQR(recoveryKey)
 
 		fmt.Println(common.Green("Vault created successfully!"))
-		fmt.Println(common.Yellow("⚠️ RECOVERY KEY — SAVE IT NOW:"))
-		fmt.Printf("	Scan the QR code above with your phone, or\n")
-		fmt.Printf("	Copy the file before it's deleted:\n")
-		fmt.Printf("%s\n", common.Green(tmpFile))
 		fmt.Println()
-		fmt.Printf("File will be securely deleted in %d seconds.\n", 60)
-		fmt.Println(common.Yellow("Press Enter to delete the file now, or wait 60 seconds for automatic deletion."))
-		fmt.Println(common.Yellow("Make sure you have saved the recovery key before pressing Enter!"))
-		fmt.Println(common.Yellow("Anyone with this key can access your vault and all backups."))
-		fmt.Println(common.Yellow("Store it offline: paper, another device, encrypted USB."))
-		fmt.Println("To recover: upass recover <key>")
-
-		done := make(chan bool)
-		go func() {
-			time.Sleep(60 * time.Second)
-			done <- true
-		}()
-		go func() {
-			readLine()
-			done <- true
-		}()
-		<-done
-
-		if err := tmpDelete(tmpFile); err != nil {
-			fmt.Println(common.Yellow("⚠️ WARNINg: Could not securely remove temp file: %v", err))
-			fmt.Println(common.Yellow("Please delete it manually: %s", tmpFile))
-		} else {
-			fmt.Println(common.Green("Recovery key file removed from the filesystem."))
-		}
-
-		fmt.Println(common.Yellow("⚠️ NOTE: On modern SSDs, hardware wear-leveling may prevent guaranteed physical overwriting."))
-		fmt.Println(common.Yellow("For absolute security, physical destruction of the drive is required if compromised."))
+		fmt.Println(common.Yellow("⚠️  RECOVERY KEY — SAVE IT NOW OR LOSE ACCESS FOREVER"))
+		fmt.Println(common.Yellow("This is the ONLY time this key will be displayed."))
+		fmt.Println()
+		fmt.Println("Scan the QR code above with your phone, or copy the key below:")
+		fmt.Println(common.Cyan(recoveryKey))
+		fmt.Println()
+		fmt.Println(common.Yellow("⚠️  WARNING:"))
+		fmt.Println("  • Store this key offline: on paper, in a password manager, or on an encrypted USB.")
+		fmt.Println("  • Don't save it in a plain text file on this computer.")
+		fmt.Println("  • Anyone with this key can access your vault and all backups.")
+		fmt.Println()
+		fmt.Println("To recover your vault in the future, run: upass recover <key>")
 
 		return nil
 	},
-}
-
-func saveRecoveryKeyTemp(key string) (string, error) {
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("upass-recovery-key-%d.txt", time.Now().Unix()))
-
-	if err := os.WriteFile(tmpFile, []byte(key), 0600); err != nil {
-		return "", err
-	}
-
-	return tmpFile, nil
 }
 
 func showRecoveryQR(key string) {
@@ -117,10 +73,8 @@ func showRecoveryQR(key string) {
 		fmt.Println(common.Red("Failed to generate QR code."))
 		return
 	}
-
 	fmt.Println()
 	fmt.Println(qr.ToSmallString(false))
-	fmt.Println()
 }
 
 func init() {

@@ -20,7 +20,6 @@ type VaultService struct {
 	unlocked bool
 }
 
-// NewVaultService creates a new VaultService for the given file path.
 // NewVaultService creates a VaultService bound to the given filename.
 // The service provides higher-level operations on the vault file (unlocking,
 // CRUD for records, backups and recovery).
@@ -82,11 +81,8 @@ func (s *VaultService) ListServices() []string {
 		return nil
 	}
 	services := make([]string, 0, len(s.vault.Records))
-	for key, rec := range s.vault.Records {
+	for key := range s.vault.Records {
 		entry := key
-		if len(rec.Note) > 0 {
-			entry += " *"
-		}
 		services = append(services, entry)
 	}
 	return services
@@ -193,6 +189,7 @@ func (s *VaultService) RecoverVault(encodedKey string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", common.ErrReadVaultFile, err)
 	}
+	defer common.ZeroBytes(fullData)
 
 	if len(fullData) < common.BaseHeaderSize {
 		return nil, fmt.Errorf("file too short")
@@ -217,6 +214,7 @@ func (s *VaultService) RecoverVault(encodedKey string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer common.ZeroBytes(masterPassword)
 
 	return masterPassword, nil
 }
@@ -224,9 +222,14 @@ func (s *VaultService) RecoverVault(encodedKey string) ([]byte, error) {
 // ChangePassword replaces the vault master password. It updates the
 // encrypted master password (EMP) using the provided encoded recovery key and
 // persists the vault encrypted with the new password.
+// It ensures transactional integrity: memory is only updated if disk write succeeds.
 func (s *VaultService) ChangePassword(oldPassword []byte, newPassword []byte, encodedRecoveryKey string) error {
 	if !s.unlocked {
 		return common.ErrLocked
+	}
+
+	if _, err := store.Load(s.filename, oldPassword); err != nil {
+		return fmt.Errorf("old password verification failed: %w", err)
 	}
 
 	recoveryKey, err := crypto.DecodeRecoveryKey(encodedRecoveryKey)
@@ -240,11 +243,14 @@ func (s *VaultService) ChangePassword(oldPassword []byte, newPassword []byte, en
 		return err
 	}
 
-	s.vault.EncryptedMasterPass = newEncryptedMaster
+	vaultToSave := s.vault
+	vaultToSave.EncryptedMasterPass = newEncryptedMaster
 
-	if err := store.Save(s.filename, s.vault, newPassword); err != nil {
+	if err := store.Save(s.filename, vaultToSave, newPassword); err != nil {
 		return fmt.Errorf("save after password change: %w", err)
 	}
+
+	s.vault.EncryptedMasterPass = newEncryptedMaster
 
 	return nil
 }

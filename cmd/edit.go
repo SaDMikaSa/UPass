@@ -61,7 +61,7 @@ func init() {
 func editService(oldRecord domain.Record) (domain.Record, error) {
 	record := domain.Record{}
 
-	fmt.Printf("Input service. Current value: %s (leave empty to keep current): ", string(oldRecord.Service))
+	fmt.Printf("Service. Current value: %s (leave empty to keep current): ", string(oldRecord.Service))
 	service, err := readLine()
 	if err != nil {
 		return record, err
@@ -75,7 +75,8 @@ func editService(oldRecord domain.Record) (domain.Record, error) {
 		serviceBytes = []byte(service)
 	}
 
-	fmt.Printf("Input login. Current value: %s (leave empty to keep current): ", string(oldRecord.Login))
+	fmt.Printf("Login. Current value: %s (leave empty to keep current): ",
+		oldRecord.Login)
 	login, err := readLine()
 	if err != nil {
 		return record, err
@@ -102,7 +103,7 @@ func editService(oldRecord domain.Record) (domain.Record, error) {
 	} else {
 		var passwordAgain []byte
 
-		fmt.Print("Confirm the password:")
+		fmt.Print("Confirm the password: ")
 		passwordAgain, err = inputOptionalPassword()
 		defer common.ZeroBytes(passwordAgain)
 		if err != nil {
@@ -117,7 +118,7 @@ func editService(oldRecord domain.Record) (domain.Record, error) {
 		copy(record.Password, password)
 	}
 
-	fmt.Printf("Input note. Current value: %s (leave empty to keep current): ", string(oldRecord.Note))
+	fmt.Printf("Note. Current value: %s (leave empty to keep current): ", string(oldRecord.Note))
 	note, err := readLine()
 	if err != nil {
 		return record, err
@@ -133,6 +134,17 @@ func editService(oldRecord domain.Record) (domain.Record, error) {
 	record.Service = serviceBytes
 	record.Login = make([]byte, len(loginBytes))
 	copy(record.Login, loginBytes)
+
+	if note != "" {
+		fmt.Println(common.Cyan("| Service: %s | Login: %s | Note: %s |", service, login, note))
+	} else {
+		fmt.Println(common.Cyan("| Service: %s | Login: %s |", service, login))
+	}
+
+	fmt.Print("Confirm? (y/n): ")
+	if !readConfirmation() {
+		return record, common.ErrCanceled
+	}
 
 	return record, nil
 }

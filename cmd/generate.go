@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/spf13/cobra"
@@ -23,10 +22,13 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("password length must be positive, got %d", genLength)
 		}
 
-		password := generateRandomPassword()
+		password, err := generateRandomPassword()
+		if err != nil {
+			return err
+		}
 		defer common.ZeroBytes(password)
 
-		fmt.Fprintln(os.Stdout, string(password))
+		fmt.Println(common.Cyan("%s", password))
 		return nil
 	},
 }

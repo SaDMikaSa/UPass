@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/SaDMikaSa/UPass/internal/domain"
 	"github.com/nbutton23/zxcvbn-go"
@@ -45,15 +44,8 @@ func CheckWeakPasswords(records map[string]domain.Record, minScore int) []WeakPa
 
 	for _, rec := range records {
 		func() {
-			// Zero-allocation string conversion via unsafe.
-			// The string points to the same underlying buffer as rec.Password,
-			// so it can be securely zeroed by the caller.
-			var password string
-			if len(rec.Password) > 0 {
-				password = unsafe.String(&rec.Password[0], len(rec.Password))
-			}
-
-			strength := zxcvbn.PasswordStrength(password, nil)
+			passwordStr := string(rec.Password)
+			strength := zxcvbn.PasswordStrength(passwordStr, nil)
 			if strength.Score < minScore {
 				results = append(results, WeakPasswordResult{
 					Service:      string(rec.Service),
@@ -111,6 +103,7 @@ func fetchHIBPRange(prefix string) ([]byte, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Add-Padding", "true")
+	req.Header.Set("User-Agent", "UPass-CLI")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -122,7 +115,7 @@ func fetchHIBPRange(prefix string) ([]byte, error) {
 		return nil, fmt.Errorf("hibp status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}

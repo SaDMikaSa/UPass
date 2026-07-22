@@ -1,12 +1,15 @@
 package store
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/SaDMikaSa/UPass/internal/common"
 )
 
 const (
@@ -135,16 +138,19 @@ func ListBackups(vaultPath string, config BackupConfig) ([]BackupInfo, error) {
 }
 
 // RestoreBackup replaces the active vault file with the provided backup.
-// A pre-restore copy of the current vault is created as vaultPath.pre-restore.bak
-// when possible to allow rollback.
+// It performs atomic write with validation and creates a pre-restore backup.
 func RestoreBackup(backupPath, vaultPath string) error {
 	if _, err := os.Stat(backupPath); err != nil {
 		return fmt.Errorf("backup file not found: %w", err)
 	}
 
-	data, err := os.ReadFile(backupPath)
+	backupData, err := os.ReadFile(backupPath)
 	if err != nil {
 		return fmt.Errorf("read backup: %w", err)
+	}
+
+	if len(backupData) < 4 || !bytes.Equal(backupData[:4], common.VaultMagic) {
+		return fmt.Errorf("backup file is not a valid UPass vault (invalid magic bytes)")
 	}
 
 	if currentData, err := os.ReadFile(vaultPath); err == nil {
@@ -154,8 +160,24 @@ func RestoreBackup(backupPath, vaultPath string) error {
 		}
 	}
 
-	if err := os.WriteFile(vaultPath, data, 0600); err != nil {
-		return fmt.Errorf("write restored vault: %w", err)
+	tmpFile := vaultPath + ".restore.tmp"
+
+	if err := os.WriteFile(tmpFile, backupData, 0600); err != nil {
+		return fmt.Errorf("write temp restore file: %w", err)
+	}
+
+	if f, err := os.OpenFile(tmpFile, os.O_WRONLY, 0); err == nil {
+		if err := f.Sync(); err != nil {
+			f.Close()
+			os.Remove(tmpFile)
+			return fmt.Errorf("sync temp restore file: %w", err)
+		}
+		f.Close()
+	}
+
+	if err := os.Rename(tmpFile, vaultPath); err != nil {
+		os.Remove(tmpFile)
+		return fmt.Errorf("rename temp restore file: %w", err)
 	}
 
 	return nil

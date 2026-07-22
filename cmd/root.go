@@ -20,8 +20,7 @@ func init() {
 var rootCmd = &cobra.Command{
 	Use:   "upass",
 	Short: "CLI password manager",
-	Long: `UPass - local encrypted password manager.
-		Securely store, add, and retrieve credentials.`,
+	Long:  `UPass - local encrypted password manager. Securely store, add, and retrieve credentials.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()

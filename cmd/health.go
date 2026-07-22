@@ -15,10 +15,9 @@ var (
 var healthCmd = &cobra.Command{
 	Use:   "health",
 	Short: "Run vault security health check",
-	Long: `Check your passwords for weaknesses, duplicates, breaches, and reused logins.
-			Breached password check uses Have I Been Pwned API with k-anonymity:
-			only the first 5 characters of the SHA-1 hash are sent over the network.
-			Use --no-hibp to skip this check.`,
+	Long: `Check your passwords for weaknesses, duplicates, breaches, and reused logins. Breached password check uses Have I Been Pwned API with k-anonymity: 
+	only the first 5 characters of the SHA-1 hash are sent over the network. 
+	Use --no-hibp to skip this check.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
 		if err != nil {
@@ -26,9 +25,7 @@ var healthCmd = &cobra.Command{
 		}
 		defer common.ZeroBytes(password)
 
-		fmt.Println(common.Cyan("======================"))
 		fmt.Println(common.Cyan("Vault Health Report"))
-		fmt.Println(common.Cyan("======================"))
 		fmt.Println()
 
 		records := vaultService.Records()
@@ -37,7 +34,7 @@ var healthCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Println(common.Yellow("⚠️ WEAK PASSWORDS (strength score < %d out of 4)", common.MinStrengthScore))
+		fmt.Println(common.Yellow("⚠️  WEAK PASSWORDS (strength score < %d out of 4)", common.MinStrengthScore))
 		weakPasswords := health.CheckWeakPasswords(records, common.MinStrengthScore)
 		if len(weakPasswords) == 0 {
 			fmt.Println(common.Green("All passwords are strong!"))
@@ -55,10 +52,10 @@ var healthCmd = &cobra.Command{
 		fmt.Println(common.Yellow("DUPLICATE PASSWORDS"))
 		duplicates := health.CheckDuplicatePasswords(records)
 		if len(duplicates) == 0 {
-			fmt.Println(common.Green("	No duplicate passwords!"))
+			fmt.Println(common.Green(" No duplicate passwords!"))
 		} else {
 			for _, d := range duplicates {
-				fmt.Printf("  %d services share the same password:\n", len(d.Services))
+				fmt.Printf(" %d services share the same password:\n", len(d.Services))
 				for _, s := range d.Services {
 					fmt.Printf("    - %s\n", common.Cyan(s))
 				}
@@ -74,10 +71,10 @@ var healthCmd = &cobra.Command{
 			fmt.Println("  Checking... (this may take a moment)")
 			breached = health.CheckAllBreached(records)
 			if len(breached) == 0 {
-				fmt.Println(common.Green("	No breached passwords found!"))
+				fmt.Println(common.Green(" No breached passwords found!"))
 			} else {
 				for _, b := range breached {
-					fmt.Printf("  %s — found in %s data breaches!\n",
+					fmt.Printf(" %s — found in %s data breaches!\n",
 						common.Red("%s", b.Service),
 						common.Red("%d", b.Count),
 					)

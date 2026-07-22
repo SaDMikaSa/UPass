@@ -60,7 +60,6 @@ func Encrypt(plaintext []byte, password []byte, encryptedMasterPass []byte) ([]b
 	}
 
 	defer common.ZeroBytes(nonce)
-
 	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
 
 	header := make([]byte, 0, 128)
@@ -102,6 +101,10 @@ func Decrypt(fullData []byte, password []byte) (plaintext []byte, encryptedMaste
 	}
 
 	version := fullData[4]
+	// TODO: MIGRATION
+
+	// type Migration func(data []byte) ([]byte, error)
+	// var migrations = map[byte]Migration{ 1: migrateV1toV2 }
 	if version != common.VaultVersion {
 		return nil, nil, fmt.Errorf("unsupported vault version: %d", version)
 	}

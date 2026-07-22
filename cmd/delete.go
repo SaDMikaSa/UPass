@@ -20,7 +20,7 @@ var deleteCmd = &cobra.Command{
 
 		service := args[0]
 
-		fmt.Println(common.Yellow("⚠️ WARNING: This action cannot be undone!"))
+		fmt.Println(common.Yellow("⚠️  WARNING: This action cannot be undone!"))
 		fmt.Printf("Are you sure you want to delete %s? (y/n): ", service)
 		if !readConfirmation() {
 			fmt.Println(common.Red("Cancelled"))

@@ -12,10 +12,9 @@ import (
 var passwdCmd = &cobra.Command{
 	Use:   "passwd",
 	Short: "Change the master password",
-	Long: `Change the master password of the vault.
-		You will be asked whether you have the current recovery key:
-  			- If yes, the key is reused and recovery keeps working.
-  			- If no, recovery will be permanently disabled for this vault.`,
+	Long: `Change the master password of the vault. You will be asked whether you have the current recovery key: 
+	- If yes, the key is reused and recovery keeps working. 
+	- If no, recovery will be permanently disabled for this vault.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		currentPassword, err := unlock()
 		if err != nil {

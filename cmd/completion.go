@@ -51,9 +51,8 @@ var completionInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install shell completion permanently",
 	Long: `Detect current shell and install completion script to the correct location.
-		After installation, completion will work in new terminal sessions.
-
-		Supported shells: bash, zsh, fish`,
+	After installation, completion will work in new terminal sessions.
+	Supported shells: bash, zsh, fish`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := installBinary(); err != nil {
 			return fmt.Errorf("install binary: %w", err)
@@ -67,7 +66,7 @@ var completionInstallCmd = &cobra.Command{
 			shell = detectShell()
 			if shell == "" {
 				fmt.Println(common.Yellow("⚠️  Could not detect shell. Please use --shell flag:"))
-				fmt.Println("   upass completion install --shell fish")
+				fmt.Println(" upass completion install --shell fish")
 				return nil
 			}
 			fmt.Println(common.Cyan("Detected shell: %s", shell))
@@ -114,7 +113,7 @@ var completionInstallCmd = &cobra.Command{
 		}
 
 		fmt.Println(common.Green("upass installed to %s", filepath.Join(home, ".local", "bin", "upass")))
-		fmt.Println("   Open a new terminal and run: upass init")
+		fmt.Println(" Open a new terminal and run: upass init")
 		return nil
 	},
 }

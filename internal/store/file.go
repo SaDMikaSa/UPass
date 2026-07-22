@@ -11,10 +11,6 @@ import (
 	"github.com/gofrs/flock"
 )
 
-// Save persists the given vault to disk at filename, encrypting the JSON
-// payload with a key derived from password. The function takes a file lock to
-// prevent concurrent writers, writes atomically via a temporary file, and
-// triggers an automatic backup after a successful save.
 func Save(filename string, vault domain.Vault, password []byte) error {
 	lock := flock.New(filename)
 	locked, err := lock.TryLock()
@@ -37,6 +33,13 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 		return err
 	}
 
+	if _, err := os.Stat(filename); err == nil {
+		config := DefaultBackupConfig()
+		if backupErr := CreateBackup(filename, config); backupErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: automatic backup failed (%v). Vault will still be saved.\n", backupErr)
+		}
+	}
+
 	tmpFile := filename + ".tmp"
 	err = os.WriteFile(tmpFile, encrypted, 0600)
 	if err != nil {
@@ -47,11 +50,6 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	if err != nil {
 		os.Remove(tmpFile)
 		return fmt.Errorf("rename temp file: %w", err)
-	}
-
-	config := DefaultBackupConfig()
-	if err := CreateBackup(filename, config); err != nil {
-		return fmt.Errorf("auto-backup failed: %w", err)
 	}
 
 	return nil

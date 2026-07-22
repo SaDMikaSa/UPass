@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/atotto/clipboard"
@@ -37,10 +38,18 @@ var getCmd = &cobra.Command{
 				return fmt.Errorf("copy to clipboard: %w", err)
 			}
 			fmt.Printf("Service: %s\nLogin: %s\n", common.Cyan("%s", record.Service), common.Cyan("%s", record.Login))
+			if len(record.Note) != 0 {
+				fmt.Println(common.Cyan("Note: %s", record.Note))
+			}
 			fmt.Println(common.Green("Password copied to clipboard!"))
-		}
-		if len(record.Note) != 0 {
-			fmt.Println(common.Cyan("Note: %s", record.Note))
+			fmt.Println(common.Yellow("⚠️  WARNING: Process will stay alive for 15s to clear clipboard."))
+			fmt.Println(common.Yellow("	Press Ctrl+C to exit early (clipboard will NOT be cleared)."))
+
+			for i := 15; i > 0; i-- {
+				time.Sleep(1 * time.Second)
+			}
+			_ = clipboard.WriteAll("")
+			fmt.Println(common.Green("Clipboard cleared. Exiting."))
 		}
 
 		return nil

@@ -20,14 +20,14 @@ A secure, local-first password manager for the command line.
 # 1. Clone and build
 git clone https://github.com/SaDMikaSa/UPass.git
 cd UPass
-go build -o upass .
+go build -o upass
 
-# 2. (Optional but recommended) Move to your local bin
-cp upass ~/.local/bin/
-
-# 3. Auto-configure shell completion and PATH
+# 2 Auto-configure shell completion and PATH
 # (Supports Bash, Zsh, and Fish. Run this from the shell you want to configure)
 ./upass completion install
+
+# 3. (Optional but recommended) Move to your local bin
+cp upass ~/.local/bin/
 ```
 
 ## Quick Start
@@ -45,8 +45,7 @@ upass add
 # Input password: ********
 
 # Add with auto-generated password (press Enter to keep, or type chars to exclude)
-upass add -g
-# Input service: reddit
+upass add reddit -g
 # Input login: user123
 # Generated password: xK9#mP2$vL5nQ8@rT4
 # Enter forbidden characters (e.g., O0l1, or "O 0" to forbid spaces), or Enter to keep:
@@ -78,7 +77,7 @@ upass delete reddit
 # Check password health
 upass health
 # Skip online breach check (fully offline mode)
-upass health --no-h and HIBP
+upass health --no-hibp
 
 # Manage backups
 upass backup list

@@ -10,40 +10,42 @@ import (
 	"github.com/SaDMikaSa/UPass/internal/common"
 )
 
-func generatePasswordWithCharset(charset string, length int) []byte {
+func generatePasswordWithCharset(charset string, length int) ([]byte, error) {
 	if len(charset) == 0 {
-		panic("generatePasswordWithCharset: charset is empty")
+		return nil, common.ErrCharsetEmpty
 	}
-
 	password := make([]byte, length)
 	charsetLen := big.NewInt(int64(len(charset)))
 	for i := range password {
 		n, err := rand.Int(rand.Reader, charsetLen)
 		if err != nil {
 			common.ZeroBytes(password)
-			panic(fmt.Sprintf("crypto/rand failed: %v", err))
+			return nil, fmt.Errorf("crypto/rand failed: %v", err)
 		}
 		password[i] = charset[n.Int64()]
 	}
-	return password
+	return password, nil
 }
 
 // interactiveGenerate generates a password and allows the user to specify
 // forbidden characters. It regenerates the password until the user accepts it.
-func interactiveGenerate() []byte {
+func interactiveGenerate() ([]byte, error) {
 	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	if !genNoSymbols {
 		charset += "!@#$%^&*()-_=+[]{}|;:,.<>?"
 	}
 
 	for {
-		password := generatePasswordWithCharset(charset, genLength)
-		fmt.Printf("Generated password: %s\n", string(password))
+		password, err := generatePasswordWithCharset(charset, genLength)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println(common.Cyan("Generated password: %s", password))
 
 		fmt.Print("Enter forbidden characters (e.g., O0l1, or \"O 0\" to forbid spaces), or Enter to keep: ")
 		input, err := readLine()
 		if err != nil || strings.TrimSpace(input) == "" {
-			return password
+			return password, nil
 		}
 
 		var forbiddenStr string
@@ -88,7 +90,7 @@ func interactiveGenerate() []byte {
 
 		if !hasForbidden {
 			fmt.Println(common.Green("None of the forbidden characters were in the password. Keeping current."))
-			return password
+			return password, nil
 		}
 
 		fmt.Println(common.Yellow("Regenerating password with updated rules..."))
@@ -96,7 +98,7 @@ func interactiveGenerate() []byte {
 	}
 }
 
-func generateRandomPassword() []byte {
+func generateRandomPassword() ([]byte, error) {
 	charset := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	if !genNoSymbols {
 		charset += "!@#$%^&*()-_=+[]{}|;:,.<>?"
@@ -110,5 +112,10 @@ func generateRandomPassword() []byte {
 		}
 		charset = filtered.String()
 	}
-	return generatePasswordWithCharset(charset, genLength)
+
+	result, err := generatePasswordWithCharset(charset, genLength)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

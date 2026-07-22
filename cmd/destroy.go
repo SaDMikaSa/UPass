@@ -15,11 +15,8 @@ import (
 var destroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Permanently delete the vault, backups, and the binary",
-	Long: `Irreversibly delete the vault file, all backups, the service cache, 
-		and attempt to remove the upass binary from your local bin directory.
-		After this, you can run 'upass init' to start fresh (if you reinstall the binary).
-
-		This action CANNOT be undone.`,
+	Long: `Irreversibly delete the vault file, all backups, the service cache, and attempt to remove the upass binary from your local bin directory. After this, you can run 'upass init' to start fresh (if you reinstall the binary). 
+	This action CANNOT be undone.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultPath := vaultService.Filename()
 
@@ -28,14 +25,12 @@ var destroyCmd = &cobra.Command{
 			return nil
 		}
 
-		// 1. Подтверждение владением (master password)
 		password, err := unlock()
 		if err != nil {
 			return err
 		}
 		defer common.ZeroBytes(password)
 
-		// 2. Показываем, что будет удалено
 		fmt.Println()
 		fmt.Println(common.Red("The following will be PERMANENTLY DELETED:"))
 		fmt.Printf("  • Vault:       %s\n", vaultPath)
@@ -52,7 +47,6 @@ var destroyCmd = &cobra.Command{
 			fmt.Printf("  • Cache:       %s\n", cachePath)
 		}
 
-		// Добавляем информацию о бинарнике
 		binPath := getExpectedBinPath(home)
 		if _, err := os.Stat(binPath); err == nil {
 			fmt.Printf("  • Binary:      %s\n", binPath)
@@ -62,38 +56,29 @@ var destroyCmd = &cobra.Command{
 		fmt.Println(common.Red("⚠️  This action CANNOT be undone. All passwords will be lost."))
 		fmt.Println()
 
-		// 3. Подтверждение полным словом
-		fmt.Print("Type 'destroy' to confirm: ")
+		fmt.Print("Type 'Destroy' to confirm: ")
 		confirmation, err := readLine()
 		if err != nil {
 			return err
 		}
-		if confirmation != "destroy" {
+		if confirmation != "Destroy" {
 			fmt.Println(common.Red("Cancelled. Vault is intact."))
 			return nil
 		}
 
-		// 4. Удаляем vault (безопасная перезапись)
-		if err := secureRemove(vaultPath); err != nil {
+		if err := tmpDelete(vaultPath); err != nil {
 			return fmt.Errorf("delete vault: %w", err)
 		}
 
-		// 5. Удаляем бэкапы
 		for _, b := range backups {
 			if err := os.Remove(b.Path); err != nil {
 				fmt.Println(common.Yellow("Warning: could not remove backup %s: %v", b.Path, err))
 			}
 		}
 
-		// 6. Удаляем pre-restore backup и lock-файл
 		os.Remove(vaultPath + ".pre-restore.bak")
 		os.Remove(vaultPath + ".lock")
-
-		// 7. Удаляем кэш сервисов
 		os.Remove(cachePath)
-
-		// 8. Пытаемся удалить бинарный файл
-		removeInstalledBinary(home)
 
 		fmt.Println()
 		fmt.Println(common.Green("Vault and all associated data have been permanently deleted."))
@@ -114,44 +99,10 @@ func getExpectedBinPath(home string) string {
 	return filepath.Join(home, ".local", "bin", "upass")
 }
 
-// removeInstalledBinary attempts to delete the upass binary from the standard
-// installation directories. It prints a warning if the OS prevents deletion
-// (e.g., because the file is currently running).
-func removeInstalledBinary(home string) {
-	binPath := getExpectedBinPath(home)
-
-	// Также проверим ~/bin/upass на всякий случай (некоторые пользователи ставят туда)
-	altBinPath := filepath.Join(home, "bin", "upass")
-	pathsToCheck := []string{binPath}
-	if binPath != altBinPath {
-		pathsToCheck = append(pathsToCheck, altBinPath)
-	}
-
-	removedAny := false
-	for _, path := range pathsToCheck {
-		if _, err := os.Stat(path); err == nil {
-			err := os.Remove(path)
-			if err != nil {
-				fmt.Println(common.Yellow("⚠️  Warning: Could not remove binary at %s", path))
-				fmt.Println(common.Yellow("   (The file may be in use. Please delete it manually.)"))
-			} else {
-				fmt.Println(common.Green("Removed installed binary from: %s", path))
-				removedAny = true
-			}
-		}
-	}
-
-	if !removedAny {
-		_, err := os.Executable()
-		if err == nil {
-			fmt.Println(common.Yellow("ℹ️  Note: The upass binary was not found in standard installation directories."))
-			fmt.Println(common.Yellow("   If you are running a local build (e.g., ./upass), you may want to delete it manually."))
-		}
-	}
-}
-
-// secureRemove overwrites the file with random data then zeros before deletion.
-func secureRemove(path string) error {
+// tmpDelete performs a best-effort secure deletion of a file.
+// It overwrites the file with cryptographically secure random data,
+// then with zeros, forcing a disk sync after each pass before removal.
+func tmpDelete(path string) error {
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return nil
@@ -170,17 +121,29 @@ func secureRemove(path string) error {
 		_ = os.Remove(path)
 		return err
 	}
+	defer f.Close()
 
 	randomData := make([]byte, size)
 	if _, err := rand.Read(randomData); err == nil {
-		f.WriteAt(randomData, 0)
-		f.Sync()
+		if _, err := f.WriteAt(randomData, 0); err != nil {
+			_ = os.Remove(path)
+			return err
+		}
+		if err := f.Sync(); err != nil {
+			_ = os.Remove(path)
+			return err
+		}
 	}
 
 	zeroData := make([]byte, size)
-	f.WriteAt(zeroData, 0)
-	f.Sync()
+	if _, err := f.WriteAt(zeroData, 0); err != nil {
+		_ = os.Remove(path)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = os.Remove(path)
+		return err
+	}
 
-	f.Close()
 	return os.Remove(path)
 }

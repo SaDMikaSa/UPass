@@ -6,6 +6,8 @@ import "runtime"
 // runtime.KeepAlive to reduce the likelihood that the slice contents are
 // garbage-collected or moved before being cleared. This mitigates, but
 // does not fully eliminate, secret retention in Go memory.
+//
+//go:noinline
 func ZeroBytes(data []byte) {
 	for i := range data {
 		data[i] = 0
