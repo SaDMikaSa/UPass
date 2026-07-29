@@ -9,8 +9,11 @@ import (
 
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/SaDMikaSa/UPass/internal/store"
+	"github.com/nbutton23/zxcvbn-go"
 	"golang.org/x/term"
 )
+
+var stdinScanner = bufio.NewScanner(os.Stdin)
 
 // unlock prompts the user for the master password and unlocks the vault
 // service. On success it returns the entered password (caller should zero it
@@ -50,14 +53,13 @@ func inputPass(prompt string) ([]byte, error) {
 // readLine reads a single trimmed line from stdin. It returns an error on
 // EOF or when the input scanner produces an error.
 func readLine() (string, error) {
-	scanner := bufio.NewScanner(os.Stdin)
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
+	if !stdinScanner.Scan() {
+		if err := stdinScanner.Err(); err != nil {
 			return "", fmt.Errorf("read input: %w", err)
 		}
 		return "", fmt.Errorf("EOF")
 	}
-	return strings.TrimSpace(scanner.Text()), nil
+	return strings.TrimSpace(stdinScanner.Text()), nil
 }
 
 // readConfirmation reads a yes/no confirmation from stdin and returns true
@@ -84,4 +86,25 @@ func saveServicesCache(services []string) {
 
 	os.MkdirAll(filepath.Dir(cachePath), 0700)
 	os.WriteFile(cachePath, []byte(data), 0600)
+}
+
+// promptNewMasterPassword reads and confirms a new master password.
+// Returns nil if user cancels on weak password warning.
+func newMasterPassword() ([]byte, error) {
+	pass, err := inputPass("Enter master password: ")
+	if err != nil {
+		return nil, err
+	}
+
+	strength := zxcvbn.PasswordStrength(string(pass), nil)
+	if strength.Score < common.MinStrengthScore {
+		common.YellowPrintf("⚠️  Weak password (score: %d/4, crack time: %s)\n", strength.Score, strength.CrackTimeDisplay)
+		fmt.Print("Continue anyway? (y/n): ")
+
+		if !readConfirmation() {
+			common.ZeroBytes(pass)
+			return nil, common.ErrCanceled
+		}
+	}
+	return pass, nil
 }

@@ -101,8 +101,8 @@ func EncodeRecoveryKey(key []byte) string {
 
 // DecodeRecoveryKey decodes a base64 encoded recovery key and validates its
 // length.
-func DecodeRecoveryKey(encoded string) ([]byte, error) {
-	key, err := base64.StdEncoding.DecodeString(encoded)
+func DecodeRecoveryKey(encoded []byte) ([]byte, error) {
+	key, err := base64.StdEncoding.DecodeString(string(encoded))
 	if err != nil {
 		return nil, fmt.Errorf("invalid recovery key format")
 	}

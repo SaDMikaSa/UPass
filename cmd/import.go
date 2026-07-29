@@ -20,16 +20,16 @@ var importCmd = &cobra.Command{
 	Duplicates will be skipped with a warning.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		fileData, err := os.ReadFile(importFile)
+		defer common.ZeroBytes(fileData)
 		if err != nil {
 			return fmt.Errorf("failed to read import file: %w", err)
 		}
-		defer common.ZeroBytes(fileData)
 
 		var importData []exportRecord
 		if err := json.Unmarshal(fileData, &importData); err != nil {
@@ -37,7 +37,7 @@ var importCmd = &cobra.Command{
 		}
 
 		if len(importData) == 0 {
-			fmt.Println(common.Yellow("No records found in the import file."))
+			common.YellowPrintln("No records found in the import file.")
 			return nil
 		}
 
@@ -55,7 +55,16 @@ var importCmd = &cobra.Command{
 			}
 			copy(record.Password, item.Password)
 
+			if item.Service == "" || item.Login == "" {
+				skipCount++
+				continue
+			}
+
 			err := vaultService.AddRecord(record, password)
+			common.ZeroBytes(record.Service)
+			common.ZeroBytes(record.Login)
+			common.ZeroBytes(record.Password)
+			common.ZeroBytes(record.Note)
 			if err != nil {
 				if errors.Is(err, common.ErrDuplicate) {
 					fmt.Printf("  [SKIP] %s (already exists)\n", item.Service)
@@ -66,18 +75,13 @@ var importCmd = &cobra.Command{
 				continue
 			}
 
-			common.ZeroBytes(record.Service)
-			common.ZeroBytes(record.Login)
-			common.ZeroBytes(record.Password)
-			common.ZeroBytes(record.Note)
-
 			successCount++
 		}
 
 		saveServicesCache(vaultService.ListServices())
 
 		fmt.Println()
-		fmt.Println(common.Green("Import completed!"))
+		common.GreenPrintln("Import completed!")
 		fmt.Printf("Successfully imported: %d\n", successCount)
 		if skipCount > 0 {
 			fmt.Printf("Skipped (duplicates): %d\n", skipCount)

@@ -16,6 +16,15 @@ import (
 	"github.com/nbutton23/zxcvbn-go"
 )
 
+var client = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:       10,
+		IdleConnTimeout:    10 * time.Second,
+		DisableCompression: false,
+	},
+}
+
 type WeakPasswordResult struct {
 	Service      string
 	Score        int
@@ -43,18 +52,16 @@ func CheckWeakPasswords(records map[string]domain.Record, minScore int) []WeakPa
 	var results []WeakPasswordResult
 
 	for _, rec := range records {
-		func() {
-			passwordStr := string(rec.Password)
-			strength := zxcvbn.PasswordStrength(passwordStr, nil)
-			if strength.Score < minScore {
-				results = append(results, WeakPasswordResult{
-					Service:      string(rec.Service),
-					Score:        strength.Score,
-					CrackTime:    strength.CrackTimeDisplay,
-					CrackSeconds: strength.CrackTime,
-				})
-			}
-		}()
+		passwordStr := string(rec.Password)
+		strength := zxcvbn.PasswordStrength(passwordStr, nil)
+		if strength.Score < minScore {
+			results = append(results, WeakPasswordResult{
+				Service:      string(rec.Service),
+				Score:        strength.Score,
+				CrackTime:    strength.CrackTimeDisplay,
+				CrackSeconds: strength.CrackTime,
+			})
+		}
 	}
 
 	sort.Slice(results, func(i, j int) bool {
@@ -95,7 +102,6 @@ func CheckDuplicatePasswords(records map[string]domain.Record) []DuplicateGroup 
 // responsible for parsing the response. The request sets Add-Padding:true for
 // additional privacy and uses a short timeout.
 func fetchHIBPRange(prefix string) ([]byte, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
 	url := "https://api.pwnedpasswords.com/range/" + prefix
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -163,7 +169,7 @@ func CheckBreached(password []byte) (int, error) {
 // CheckAllBreached performs HIBP checks for all records in the vault.
 // It groups passwords by the SHA‑1 prefix to minimize the number of network
 // requests (k-anonymity) and returns a list of breached services with counts.
-func CheckAllBreached(records map[string]domain.Record) []BreachedResult {
+func CheckAllBreached(records map[string]domain.Record) ([]BreachedResult, error) {
 	type recordInfo struct {
 		service string
 		suffix  string
@@ -184,10 +190,12 @@ func CheckAllBreached(records map[string]domain.Record) []BreachedResult {
 	}
 
 	var results []BreachedResult
+	apiFailedCount := 0
 
 	for prefix, infos := range prefixGroups {
 		body, err := fetchHIBPRange(prefix)
 		if err != nil {
+			apiFailedCount++
 			continue
 		}
 
@@ -202,11 +210,15 @@ func CheckAllBreached(records map[string]domain.Record) []BreachedResult {
 		}
 	}
 
+	if apiFailedCount == len(prefixGroups) && len(prefixGroups) > 0 {
+		return nil, fmt.Errorf("HIBP API is currently unavailable")
+	}
+
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Count > results[j].Count
 	})
 
-	return results
+	return results, nil
 }
 
 // CheckReusedLogins finds login identifiers that are used across multiple

@@ -23,12 +23,12 @@ var generateCmd = &cobra.Command{
 		}
 
 		password, err := generateRandomPassword()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
-		fmt.Println(common.Cyan("%s", password))
+		fmt.Printf("%s\n", password)
 		return nil
 	},
 }

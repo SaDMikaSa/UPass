@@ -10,16 +10,15 @@ const (
 	DefaultVaultName = "vault"
 )
 
-// DefaultVaultPath returns the default file path used to store the vault in
-// the user's home directory (~/.upass/vault). It ensures the directory exists
-// with restrictive permissions.
-func DefaultVaultPath() string {
+func DefaultVaultPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return DefaultVaultName
+		return DefaultVaultName, nil
 	}
 	dir := filepath.Join(home, DefaultVaultDir)
-	os.MkdirAll(dir, 0700)
+	if err = os.MkdirAll(dir, 0700); err != nil {
+		return DefaultVaultName, err
+	}
 
-	return filepath.Join(dir, DefaultVaultName)
+	return filepath.Join(dir, DefaultVaultName), nil
 }

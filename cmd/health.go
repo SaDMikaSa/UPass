@@ -20,28 +20,28 @@ var healthCmd = &cobra.Command{
 	Use --no-hibp to skip this check.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
-		fmt.Println(common.Cyan("Vault Health Report"))
+		common.CyanPrintln("Vault Health Report")
 		fmt.Println()
 
 		records := vaultService.Records()
 		if len(records) == 0 {
-			fmt.Println(common.Yellow("Vault is empty. Nothing to check."))
+			common.YellowPrintln("Vault is empty. Nothing to check.")
 			return nil
 		}
 
-		fmt.Println(common.Yellow("⚠️  WEAK PASSWORDS (strength score < %d out of 4)", common.MinStrengthScore))
+		common.YellowPrintf("WEAK PASSWORDS (strength score < %d out of 4)\n", common.MinStrengthScore)
 		weakPasswords := health.CheckWeakPasswords(records, common.MinStrengthScore)
 		if len(weakPasswords) == 0 {
-			fmt.Println(common.Green("All passwords are strong!"))
+			common.GreenPrintln("All passwords are strong!")
 		} else {
 			for _, w := range weakPasswords {
-				fmt.Printf("  %s — score: %d/4, crack time: %s\n",
-					common.Red(w.Service),
+				common.RedPrintf("  %s — score: %d/4, crack time: %s\n",
+					w.Service,
 					w.Score,
 					w.CrackTime,
 				)
@@ -49,15 +49,15 @@ var healthCmd = &cobra.Command{
 		}
 		fmt.Println()
 
-		fmt.Println(common.Yellow("DUPLICATE PASSWORDS"))
+		common.YellowPrintln("DUPLICATE PASSWORDS: ")
 		duplicates := health.CheckDuplicatePasswords(records)
 		if len(duplicates) == 0 {
-			fmt.Println(common.Green(" No duplicate passwords!"))
+			common.GreenPrintln(" No duplicate passwords!")
 		} else {
 			for _, d := range duplicates {
 				fmt.Printf(" %d services share the same password:\n", len(d.Services))
 				for _, s := range d.Services {
-					fmt.Printf("    - %s\n", common.Cyan(s))
+					common.CyanPrintf("    - %s\n", s)
 				}
 			}
 		}
@@ -65,39 +65,42 @@ var healthCmd = &cobra.Command{
 
 		var breached []health.BreachedResult
 		if skipHIBP {
-			fmt.Println(common.Yellow("BREACHED PASSWORDS — skipped (--no-hibp)"))
+			common.YellowPrintln("BREACHED PASSWORDS — skipped (--no-hibp)")
 		} else {
-			fmt.Println(common.Red("BREACHED PASSWORDS (via Have I Been Pwned)"))
-			fmt.Println("  Checking... (this may take a moment)")
-			breached = health.CheckAllBreached(records)
-			if len(breached) == 0 {
-				fmt.Println(common.Green(" No breached passwords found!"))
+			common.RedPrintln("BREACHED PASSWORDS (via Have I Been Pwned)")
+			fmt.Println("Checking... (this may take a moment)")
+			breached, err = health.CheckAllBreached(records)
+			if err != nil {
+				common.YellowPrintf("⚠️ Warning: Could not check breached passwords (%v).", err)
+				common.YellowPrintln("  Your passwords were NOT sent to the server. Check your internet connection.")
+			} else if len(breached) == 0 {
+				common.GreenPrintln(" No breached passwords found!")
 			} else {
 				for _, b := range breached {
-					fmt.Printf(" %s — found in %s data breaches!\n",
-						common.Red("%s", b.Service),
-						common.Red("%d", b.Count),
+					common.RedPrintf("  %s — found in %d data breaches!\n",
+						b.Service,
+						b.Count,
 					)
 				}
 			}
 		}
 		fmt.Println()
 
-		fmt.Println(common.Yellow("REUSED LOGINS"))
+		common.YellowPrintln("REUSED LOGINS:")
 		reused := health.CheckReusedLogins(records)
 		if len(reused) == 0 {
-			fmt.Println(common.Green("	All logins are unique!"))
+			common.GreenPrintln("  All logins are unique!")
 		} else {
 			for _, r := range reused {
 				fmt.Printf("  %s used in %d services:\n", r.Login, len(r.Services))
 				for _, s := range r.Services {
-					fmt.Printf("    - %s\n", common.Cyan(s))
+					common.CyanPrintf("    - %s\n", s)
 				}
 			}
 		}
 		fmt.Println()
 
-		fmt.Println(common.Cyan("SUMMARY"))
+		common.CyanPrintln("SUMMARY")
 		fmt.Printf("  Total records: %d\n", len(records))
 		fmt.Printf("  Weak passwords: %d\n", len(weakPasswords))
 		fmt.Printf("  Duplicate groups: %d\n", len(duplicates))

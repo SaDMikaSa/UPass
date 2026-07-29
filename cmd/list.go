@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/spf13/cobra"
 )
@@ -12,10 +10,10 @@ var listCmd = &cobra.Command{
 	Short: "List all services",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		services := vaultService.ListServices()
 		if services == nil {
@@ -23,13 +21,13 @@ var listCmd = &cobra.Command{
 		}
 
 		if len(services) == 0 {
-			fmt.Println(common.Yellow("No records found"))
+			common.RedPrintln("No records found")
 			return nil
 		}
 
-		fmt.Println(common.Cyan("Services:"))
+		common.CyanPrintln("Services:")
 		for i, s := range services {
-			fmt.Printf("  %d. %s\n", i+1, common.Cyan(s))
+			common.CyanPrintf("  %d. %s\n", i+1, s)
 		}
 		return nil
 	},

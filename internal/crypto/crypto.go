@@ -15,7 +15,7 @@ import (
 // DeriveKey derives a 32-byte encryption key from the given password and salt
 // using Argon2id with parameters taken from common configuration.
 func DeriveKey(password []byte, salt []byte) []byte {
-	return argon2.IDKey(password, salt, common.Argon2Time, common.Argon2Memory, 4, 32)
+	return argon2.IDKey(password, salt, common.Argon2Time, common.Argon2Memory, common.Argon2Threads, 32)
 }
 
 // GenerateSalt returns a securely generated random salt of size common.SaltSize.
@@ -40,6 +40,8 @@ func Encrypt(plaintext []byte, password []byte, encryptedMasterPass []byte) ([]b
 	}
 
 	key := DeriveKey(password, salt)
+	defer common.ZeroBytes(key)
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", common.ErrCreateAES, err)
@@ -50,16 +52,14 @@ func Encrypt(plaintext []byte, password []byte, encryptedMasterPass []byte) ([]b
 		return nil, fmt.Errorf("%w: %v", common.ErrCreateGCM, err)
 	}
 
-	defer common.ZeroBytes(key)
-
 	nonceSize := gcm.NonceSize()
 	nonce := make([]byte, nonceSize)
 	_, err = rand.Read(nonce)
+	defer common.ZeroBytes(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", common.ErrGenerateNonce, err)
 	}
 
-	defer common.ZeroBytes(nonce)
 	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
 
 	header := make([]byte, 0, 128)
@@ -131,7 +131,7 @@ func Decrypt(fullData []byte, password []byte) (plaintext []byte, encryptedMaste
 	nonce := fullData[offset+common.SaltSize : offset+common.SaltSize+12]
 	ciphertext := fullData[offset+common.SaltSize+12:]
 
-	key := DeriveKeyWithParams(password, salt, uint32(fileTime), uint32(fileMemory))
+	key := DeriveKeyWithParams(password, salt, uint32(fileTime), uint32(fileMemory), common.Argon2Threads)
 	defer common.ZeroBytes(key)
 
 	block, err := aes.NewCipher(key)
@@ -159,6 +159,6 @@ func Decrypt(fullData []byte, password []byte) (plaintext []byte, encryptedMaste
 // DeriveKeyWithParams derives a key using explicit Argon2 parameters. This
 // is used when decrypting older vaults that stored the KDF parameters in the
 // file header.
-func DeriveKeyWithParams(password []byte, salt []byte, time uint32, memory uint32) []byte {
-	return argon2.IDKey(password, salt, time, memory, 4, 32)
+func DeriveKeyWithParams(password []byte, salt []byte, time uint32, memory uint32, threads uint8) []byte {
+	return argon2.IDKey(password, salt, time, memory, threads, 32)
 }

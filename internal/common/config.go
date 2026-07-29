@@ -6,9 +6,10 @@ const VaultVersion = 1
 
 const (
 	SaltSize         = 16
-	Argon2Time       = 2
+	Argon2Time       = 4
 	Argon2Memory     = 64 * 1024
 	MinStrengthScore = 3
+	Argon2Threads    = 4
 )
 const (
 	MagicSize       = 4

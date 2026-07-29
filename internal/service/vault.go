@@ -55,8 +55,7 @@ func (s *VaultService) AddRecord(record domain.Record, password []byte) error {
 		return fmt.Errorf("add record: %w", err)
 	}
 
-	err = store.Save(s.filename, newVault, password)
-	if err != nil {
+	if err = store.Save(s.filename, newVault, password); err != nil {
 		return fmt.Errorf("save after add: %w", err)
 	}
 
@@ -85,6 +84,8 @@ func (s *VaultService) ListServices() []string {
 		entry := key
 		services = append(services, entry)
 	}
+
+	sort.Strings(services)
 	return services
 }
 
@@ -100,11 +101,9 @@ func (s *VaultService) DeleteRecord(service string, password []byte) error {
 		return fmt.Errorf("delete record: %w", err)
 	}
 
-	err = store.Save(s.filename, newVault, password)
-	if err != nil {
+	if err = store.Save(s.filename, newVault, password); err != nil {
 		return fmt.Errorf("save after delete: %w", err)
 	}
-
 	s.vault = newVault
 	return nil
 }
@@ -121,8 +120,7 @@ func (s *VaultService) EditRecord(service string, newRecord domain.Record, passw
 		return fmt.Errorf("edit record: %w", err)
 	}
 
-	err = store.Save(s.filename, newVault, password)
-	if err != nil {
+	if err = store.Save(s.filename, newVault, password); err != nil {
 		return fmt.Errorf("save after edit: %w", err)
 	}
 
@@ -178,18 +176,18 @@ func (s *VaultService) InitWithRecovery(password []byte) (string, error) {
 	return crypto.EncodeRecoveryKey(recoveryKey), nil
 }
 
-func (s *VaultService) RecoverVault(encodedKey string) ([]byte, error) {
+func (s *VaultService) RecoverVault(encodedKey []byte) ([]byte, error) {
 	recoveryKey, err := crypto.DecodeRecoveryKey(encodedKey)
+	defer common.ZeroBytes(recoveryKey)
 	if err != nil {
 		return nil, err
 	}
-	defer common.ZeroBytes(recoveryKey)
 
 	fullData, err := os.ReadFile(s.filename)
+	defer common.ZeroBytes(fullData)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", common.ErrReadVaultFile, err)
 	}
-	defer common.ZeroBytes(fullData)
 
 	if len(fullData) < common.BaseHeaderSize {
 		return nil, fmt.Errorf("file too short")
@@ -211,10 +209,10 @@ func (s *VaultService) RecoverVault(encodedKey string) ([]byte, error) {
 	encryptedMaster := fullData[offset : offset+int(empLen)]
 
 	masterPassword, err := crypto.DecryptMasterPassword(encryptedMaster, recoveryKey)
+	defer common.ZeroBytes(masterPassword)
 	if err != nil {
 		return nil, err
 	}
-	defer common.ZeroBytes(masterPassword)
 
 	return masterPassword, nil
 }
@@ -223,7 +221,7 @@ func (s *VaultService) RecoverVault(encodedKey string) ([]byte, error) {
 // encrypted master password (EMP) using the provided encoded recovery key and
 // persists the vault encrypted with the new password.
 // It ensures transactional integrity: memory is only updated if disk write succeeds.
-func (s *VaultService) ChangePassword(oldPassword []byte, newPassword []byte, encodedRecoveryKey string) error {
+func (s *VaultService) ChangePassword(oldPassword []byte, newPassword []byte, encodedRecoveryKey []byte) error {
 	if !s.unlocked {
 		return common.ErrLocked
 	}
@@ -233,10 +231,10 @@ func (s *VaultService) ChangePassword(oldPassword []byte, newPassword []byte, en
 	}
 
 	recoveryKey, err := crypto.DecodeRecoveryKey(encodedRecoveryKey)
+	defer common.ZeroBytes(recoveryKey)
 	if err != nil {
 		return err
 	}
-	defer common.ZeroBytes(recoveryKey)
 
 	newEncryptedMaster, err := crypto.EncryptMasterPassword(newPassword, recoveryKey)
 	if err != nil {
@@ -274,14 +272,14 @@ func (s *VaultService) SearchAll(query string, inLogin, inNote, inTag bool) []Se
 	queryBytes := []byte(query)
 
 	for _, rec := range s.vault.Records {
-		serviceLower := bytes.ToLower(rec.Service)
+		serviceLower := strings.ToLower(string(rec.Service))
 		loginLower := bytes.ToLower(rec.Login)
 		noteLower := bytes.ToLower(rec.Note)
 
 		serviceName := string(rec.Service)
 		loginName := string(rec.Login)
 
-		if bytes.Contains(serviceLower, queryBytes) {
+		if serviceLower == string(queryBytes) {
 			results = append(results, SearchResult{Service: serviceName, Login: loginName, MatchedIn: "service"})
 			continue
 		}

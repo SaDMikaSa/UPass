@@ -8,7 +8,7 @@ A secure, local-first password manager for the command line.
 - 🛡️ **Built-in Health Check** — Audit weak, duplicate, and breached (HIBP) passwords with k-anonymity.
 - 💾 **Auto-backups** — Every save automatically creates a versioned backup. No Git required.
 - ⚡ **Single Binary** — No GPG, no Node.js, no background daemon, no cloud dependency.
-- 👁️ **Privacy-first** — Everything stays encrypted on your local machine.
+- 👁️ 👁️ **Privacy-first** — Everything stays encrypted on your local machine. Secrets are actively wiped from RAM after use.
 - 📋 **Clipboard Support** — Passwords are copied to clipboard, never displayed in plain text by default.
 - 🏷️ **Multiple Accounts** — Use tags for the same service: `github:work`, `github:personal`.
 - 🐚 **Smart Auto-completion** — Native support for Bash, Zsh, and Fish with automatic PATH and config setup.
@@ -63,16 +63,19 @@ upass get github -s
 # List all services
 upass list
 
-# Search services, logins, and notes
+# Search services, logins, and notes (supports Unicode/Cyrillic for services)
 upass search git
 upass search user@email.com --login
-upass search "work account" --note
+upass search "work account" --n
 
 # Edit a record (leave fields empty to keep current values, supports renaming)
 upass edit github
 
 # Delete a record
 upass delete reddit
+
+# Change master password
+upass passwd
 
 # Check password health
 upass health
@@ -87,6 +90,10 @@ upass backup restore 2
 # Generate a password
 upass generate
 upass generate -l 32 --no-symbols
+
+# import/export
+upass export -f backup.json
+upass import -f backup.json
 ```
 
 ## Recovery
@@ -113,3 +120,11 @@ How it works:
 
 The server cannot determine your password from the prefix alone (1M+ possible prefixes, ~500 suffixes per prefix).
 Use `upass health --no-hibp` to skip the online check.
+
+## Import/Export
+
+Exporting your vault creates a plaintext JSON file.
+
+- Use case: Migrating to another password manager or creating an offline, air-gapped backup.
+- Security Warning: Anyone with access to this file can read all your passwords.
+- Best Practice: Export only when necessary, and securely delete the file immediately afterward using tools like shred (Linux/macOS) or sdelete (Windows).

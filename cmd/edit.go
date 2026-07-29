@@ -17,28 +17,28 @@ var editCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		oldRecord, err := vaultService.GetRecord(args[0])
-		if err != nil {
-			return fmt.Errorf("get record: %w", err)
-		}
 		defer common.ZeroBytes(oldRecord.Service)
 		defer common.ZeroBytes(oldRecord.Login)
 		defer common.ZeroBytes(oldRecord.Note)
 		defer common.ZeroBytes(oldRecord.Password)
+		if err != nil {
+			return fmt.Errorf("get record: %w", err)
+		}
 
 		newRecord, err := editService(oldRecord)
-		if err != nil {
-			return err
-		}
 		defer common.ZeroBytes(newRecord.Service)
 		defer common.ZeroBytes(newRecord.Login)
 		defer common.ZeroBytes(newRecord.Note)
 		defer common.ZeroBytes(newRecord.Password)
+		if err != nil {
+			return err
+		}
 
 		if err := vaultService.EditRecord(args[0], newRecord, password); err != nil {
 			return fmt.Errorf("edit record: %w", err)
@@ -46,7 +46,7 @@ var editCmd = &cobra.Command{
 
 		saveServicesCache(vaultService.ListServices())
 
-		fmt.Println(common.Green("Record updated successfully"))
+		common.GreenPrintln("Record updated successfully")
 		return nil
 	},
 }
@@ -92,10 +92,10 @@ func editService(oldRecord domain.Record) (domain.Record, error) {
 
 	fmt.Print("New password (leave empty to keep current): ")
 	password, err := inputOptionalPassword()
+	defer common.ZeroBytes(password)
 	if err != nil {
 		return record, err
 	}
-	defer common.ZeroBytes(password)
 
 	if len(password) == 0 {
 		record.Password = make([]byte, len(oldRecord.Password))
@@ -136,9 +136,9 @@ func editService(oldRecord domain.Record) (domain.Record, error) {
 	copy(record.Login, loginBytes)
 
 	if note != "" {
-		fmt.Println(common.Cyan("| Service: %s | Login: %s | Note: %s |", service, login, note))
+		common.CyanPrintf("| Service: %s | Login: %s | Note: %s |\n", service, login, note)
 	} else {
-		fmt.Println(common.Cyan("| Service: %s | Login: %s |", service, login))
+		common.CyanPrintf("| Service: %s | Login: %s |\n", service, login)
 	}
 
 	fmt.Print("Confirm? (y/n): ")

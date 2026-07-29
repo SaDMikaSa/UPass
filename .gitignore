@@ -1,4 +1,5 @@
 *.upass
 *.json
 *upass
+*upass-native
 *.lock

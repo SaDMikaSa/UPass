@@ -16,10 +16,10 @@ var searchCmd = &cobra.Command{
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		query := strings.ToLower(args[0])
 
@@ -35,11 +35,11 @@ var searchCmd = &cobra.Command{
 		results := vaultService.SearchAll(query, inLogin, inNote, inTag)
 
 		if len(results) == 0 {
-			fmt.Println(common.Yellow("No results matching %q", query))
+			common.RedPrintf("No results matching %q\n", query)
 			return nil
 		}
 
-		fmt.Println(common.Cyan("Results for %q:", query))
+		common.CyanPrintf("Results for %q:\n", query)
 		for _, r := range results {
 			noteIndicator := ""
 			if vaultService.HasNote(r.Service) {
@@ -52,7 +52,7 @@ var searchCmd = &cobra.Command{
 			}
 
 			fmt.Printf("  %s | %s%s%s\n",
-				common.Cyan(r.Service),
+				r.Service,
 				r.Login,
 				noteIndicator,
 				matchedInfo,
@@ -64,7 +64,7 @@ var searchCmd = &cobra.Command{
 
 func init() {
 	searchCmd.Flags().BoolP("login", "l", false, "Search in login fields")
-	searchCmd.Flags().BoolP("note", "n", false, "Search in notes")
+	searchCmd.Flags().BoolP("note", "n", false, "Search in service notes")
 	searchCmd.Flags().BoolP("tag", "t", false, "Search in service tags")
 	rootCmd.AddCommand(searchCmd)
 }

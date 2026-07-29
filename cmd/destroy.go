@@ -21,18 +21,18 @@ var destroyCmd = &cobra.Command{
 		vaultPath := vaultService.Filename()
 
 		if _, err := os.Stat(vaultPath); os.IsNotExist(err) {
-			fmt.Println(common.Yellow("No vault found. Nothing to destroy."))
+			common.YellowPrintln("No vault found. Nothing to destroy.")
 			return nil
 		}
 
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		fmt.Println()
-		fmt.Println(common.Red("The following will be PERMANENTLY DELETED:"))
+		common.RedPrintln("The following will be PERMANENTLY DELETED:")
 		fmt.Printf("  • Vault:       %s\n", vaultPath)
 
 		config := store.DefaultBackupConfig()
@@ -53,7 +53,7 @@ var destroyCmd = &cobra.Command{
 		}
 
 		fmt.Println()
-		fmt.Println(common.Red("⚠️  This action CANNOT be undone. All passwords will be lost."))
+		common.RedPrintln("⚠️  This action CANNOT be undone. All passwords will be lost.")
 		fmt.Println()
 
 		fmt.Print("Type 'Destroy' to confirm: ")
@@ -62,17 +62,19 @@ var destroyCmd = &cobra.Command{
 			return err
 		}
 		if confirmation != "Destroy" {
-			fmt.Println(common.Red("Cancelled. Vault is intact."))
+			common.RedPrintln("Cancelled. Vault is intact.")
 			return nil
 		}
 
+		common.YellowPrintln("⚠️  Overwriting a file does not guarantee physical destruction of old data.")
+		common.YellowPrintln("For absolute security, use Full-Disk Encryption (FDE) and hardware secure erase tools.")
 		if err := tmpDelete(vaultPath); err != nil {
 			return fmt.Errorf("delete vault: %w", err)
 		}
 
 		for _, b := range backups {
 			if err := os.Remove(b.Path); err != nil {
-				fmt.Println(common.Yellow("Warning: could not remove backup %s: %v", b.Path, err))
+				common.YellowPrintf("Warning: could not remove backup %s: %v\n", b.Path, err)
 			}
 		}
 
@@ -81,8 +83,8 @@ var destroyCmd = &cobra.Command{
 		os.Remove(cachePath)
 
 		fmt.Println()
-		fmt.Println(common.Green("Vault and all associated data have been permanently deleted."))
-		fmt.Println(common.Cyan("If you wish to use UPass again, you will need to reinstall the binary and run 'upass init'."))
+		common.GreenPrintln("Vault and all associated data have been permanently deleted.")
+		common.CyanPrintln("If you wish to use UPass again, you will need to reinstall the binary and run 'upass init'.")
 		return nil
 	},
 }
@@ -121,7 +123,6 @@ func tmpDelete(path string) error {
 		_ = os.Remove(path)
 		return err
 	}
-	defer f.Close()
 
 	randomData := make([]byte, size)
 	if _, err := rand.Read(randomData); err == nil {
@@ -145,5 +146,6 @@ func tmpDelete(path string) error {
 		return err
 	}
 
+	f.Close()
 	return os.Remove(path)
 }

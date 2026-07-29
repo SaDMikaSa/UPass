@@ -40,7 +40,7 @@ func interactiveGenerate() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println(common.Cyan("Generated password: %s", password))
+		common.CyanPrintf("Generated password: %s\n", password)
 
 		fmt.Print("Enter forbidden characters (e.g., O0l1, or \"O 0\" to forbid spaces), or Enter to keep: ")
 		input, err := readLine()
@@ -71,7 +71,7 @@ func interactiveGenerate() ([]byte, error) {
 			charset = newCharset.String()
 
 			if len(charset) == 0 {
-				fmt.Println(common.Red("Error: All characters have been excluded! Resetting to default."))
+				common.RedPrintln("Error: All characters have been excluded! Resetting to default.")
 				charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 				if !genNoSymbols {
 					charset += "!@#$%^&*()-_=+[]{}|;:,.<>?"
@@ -89,11 +89,11 @@ func interactiveGenerate() ([]byte, error) {
 		}
 
 		if !hasForbidden {
-			fmt.Println(common.Green("None of the forbidden characters were in the password. Keeping current."))
+			common.GreenPrintln("None of the forbidden characters were in the password. Keeping current.")
 			return password, nil
 		}
 
-		fmt.Println(common.Yellow("Regenerating password with updated rules..."))
+		common.YellowPrintln("Regenerating password with updated rules...")
 		common.ZeroBytes(password)
 	}
 }

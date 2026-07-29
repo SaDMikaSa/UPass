@@ -17,39 +17,39 @@ var getCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		record, err := vaultService.GetRecord(args[0])
-		if err != nil {
-			return err
-		}
 		defer common.ZeroBytes(record.Service)
 		defer common.ZeroBytes(record.Login)
 		defer common.ZeroBytes(record.Note)
 		defer common.ZeroBytes(record.Password)
+		if err != nil {
+			return err
+		}
 
 		if showPassword {
-			fmt.Printf("Service: %s\nLogin: %s\nPassword: %s\n", common.Cyan("%s", record.Service), common.Cyan("%s", record.Login), record.Password)
+			common.CyanPrintf("Service: %s\nLogin: %s\nPassword: %s\n", record.Service, record.Login, record.Password)
 		} else {
 			if err := clipboard.WriteAll(string(record.Password)); err != nil {
 				return fmt.Errorf("copy to clipboard: %w", err)
 			}
-			fmt.Printf("Service: %s\nLogin: %s\n", common.Cyan("%s", record.Service), common.Cyan("%s", record.Login))
+			common.CyanPrintf("Service: %s\nLogin: %s\n", record.Service, record.Login)
 			if len(record.Note) != 0 {
-				fmt.Println(common.Cyan("Note: %s", record.Note))
+				common.CyanPrintf("Note: %s\n", record.Note)
 			}
-			fmt.Println(common.Green("Password copied to clipboard!"))
-			fmt.Println(common.Yellow("⚠️  WARNING: Process will stay alive for 15s to clear clipboard."))
-			fmt.Println(common.Yellow("	Press Ctrl+C to exit early (clipboard will NOT be cleared)."))
+			common.GreenPrintln("Password copied to clipboard!")
+			common.YellowPrintln("⚠️ WARNING: Process will stay alive for 15s to clear clipboard.")
+			common.YellowPrintln("	Press Ctrl+C to exit early (clipboard will NOT be cleared).")
 
 			for i := 15; i > 0; i-- {
 				time.Sleep(1 * time.Second)
 			}
 			_ = clipboard.WriteAll("")
-			fmt.Println(common.Green("Clipboard cleared. Exiting."))
+			common.GreenPrintln("Clipboard cleared. Exiting.")
 		}
 
 		return nil

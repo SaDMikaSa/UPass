@@ -14,7 +14,13 @@ var (
 )
 
 func init() {
-	vaultService = service.NewVaultService(store.DefaultVaultPath())
+	vaultPath, err := store.DefaultVaultPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal: failed to initialize vault directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	vaultService = service.NewVaultService(vaultPath)
 }
 
 var rootCmd = &cobra.Command{

@@ -13,17 +13,17 @@ var deleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		service := args[0]
 
-		fmt.Println(common.Yellow("⚠️  WARNING: This action cannot be undone!"))
-		fmt.Printf("Are you sure you want to delete %s? (y/n): ", service)
+		common.YellowPrintln("⚠️  WARNING: This action cannot be undone!")
+		fmt.Printf("Are you sure you want to delete '%s'? (y/n): ", service)
 		if !readConfirmation() {
-			fmt.Println(common.Red("Cancelled"))
+			common.RedPrintln("Cancelled")
 			return nil
 		}
 
@@ -33,7 +33,7 @@ var deleteCmd = &cobra.Command{
 
 		saveServicesCache(vaultService.ListServices())
 
-		fmt.Println(common.Green("Record deleted successfully"))
+		common.GreenPrintln("Record deleted successfully")
 		return nil
 	},
 }

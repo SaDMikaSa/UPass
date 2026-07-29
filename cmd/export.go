@@ -25,14 +25,14 @@ var exportCmd = &cobra.Command{
 	Long:  `Export all vault records to a JSON file. The exported file will contain passwords in plaintext.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		fmt.Println()
-		fmt.Println(common.Yellow("⚠️  WARNING: You are about to export ALL passwords in PLAINTEXT to a file."))
-		fmt.Println(common.Yellow(" Anyone with access to this file can read your passwords."))
+		common.YellowPrintln("⚠️ WARNING: You are about to export ALL passwords in PLAINTEXT to a file.")
+		common.YellowPrintln(" Anyone with access to this file can read your passwords.")
 		fmt.Print("Type 'Export' to confirm: ")
 
 		confirmation, err := readLine()
@@ -40,13 +40,13 @@ var exportCmd = &cobra.Command{
 			return err
 		}
 		if confirmation != "Export" {
-			fmt.Println(common.Red("Export cancelled."))
+			common.RedPrintln("Export cancelled.")
 			return nil
 		}
 
 		records := vaultService.Records()
 		if len(records) == 0 {
-			fmt.Println(common.Yellow("Vault is empty. Nothing to export."))
+			common.YellowPrintln("Vault is empty. Nothing to export.")
 			return nil
 		}
 
@@ -61,10 +61,10 @@ var exportCmd = &cobra.Command{
 		}
 
 		jsonData, err := json.MarshalIndent(exportData, "", "  ")
+		defer common.ZeroBytes(jsonData)
 		if err != nil {
 			return fmt.Errorf("failed to marshal data: %w", err)
 		}
-		defer common.ZeroBytes(jsonData)
 
 		err = os.WriteFile(exportFile, jsonData, 0600)
 		if err != nil {
@@ -72,9 +72,9 @@ var exportCmd = &cobra.Command{
 		}
 
 		fmt.Println()
-		fmt.Println(common.Green("Export successful!"))
+		common.GreenPrintln("Export successful!")
 		fmt.Printf("Data saved to: %s\n", exportFile)
-		fmt.Println(common.Yellow("Remember to securely delete this file (e.g., 'shred' or 'srm') when done."))
+		common.YellowPrintln("Remember to securely delete this file (e.g., 'shred' or 'srm') when done.")
 		return nil
 	},
 }

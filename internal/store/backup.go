@@ -17,6 +17,11 @@ const (
 	DefaultMaxBackups = 10
 )
 
+type backupMeta struct {
+	path string
+	t    time.Time
+}
+
 type BackupConfig struct {
 	Enabled    bool
 	Directory  string
@@ -75,9 +80,6 @@ func CreateBackup(vaultPath string, config BackupConfig) error {
 	return rotateBackups(vaultPath, config)
 }
 
-// rotateBackups removes old backups when the number of backup files exceeds
-// config.MaxBackups. It keeps the most recent backups based on filename sort
-// order (which includes the timestamp inserted by CreateBackup).
 func rotateBackups(vaultPath string, config BackupConfig) error {
 	base := filepath.Base(vaultPath)
 	ext := filepath.Ext(base)
@@ -89,16 +91,30 @@ func rotateBackups(vaultPath string, config BackupConfig) error {
 		return fmt.Errorf("glob backups: %w", err)
 	}
 
-	if len(matches) <= config.MaxBackups {
+	var metas []backupMeta
+	layout := "2006-01-02_150405"
+
+	for _, path := range matches {
+		fileBase := filepath.Base(path)
+		tsStr := strings.TrimSuffix(strings.TrimPrefix(fileBase, nameWithoutExt+"."), ext)
+
+		if t, perr := time.Parse(layout, tsStr); perr == nil {
+			metas = append(metas, backupMeta{path: path, t: t})
+		}
+	}
+
+	if len(metas) <= config.MaxBackups {
 		return nil
 	}
 
-	sort.Strings(matches)
+	sort.Slice(metas, func(i, j int) bool {
+		return metas[i].t.Before(metas[j].t)
+	})
 
-	toDelete := matches[:len(matches)-config.MaxBackups]
-	for _, f := range toDelete {
-		if err := os.Remove(f); err != nil {
-			return fmt.Errorf("failed to remove old backup %s: %w", f, err)
+	toDelete := metas[:len(metas)-config.MaxBackups]
+	for _, b := range toDelete {
+		if err := os.Remove(b.path); err != nil {
+			return fmt.Errorf("failed to remove old backup %s: %w", b.path, err)
 		}
 	}
 

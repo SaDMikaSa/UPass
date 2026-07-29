@@ -23,10 +23,10 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	defer lock.Unlock()
 
 	data, err := json.Marshal(vault)
+	defer common.ZeroBytes(data)
 	if err != nil {
 		return err
 	}
-	defer common.ZeroBytes(data)
 
 	encrypted, err := crypto.Encrypt(data, password, vault.EncryptedMasterPass)
 	if err != nil {
@@ -36,7 +36,7 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	if _, err := os.Stat(filename); err == nil {
 		config := DefaultBackupConfig()
 		if backupErr := CreateBackup(filename, config); backupErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: automatic backup failed (%v). Vault will still be saved.\n", backupErr)
+			return fmt.Errorf("failed to create pre-write backup, aborting save for safety: %w", backupErr)
 		}
 	}
 
@@ -44,6 +44,11 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	err = os.WriteFile(tmpFile, encrypted, 0600)
 	if err != nil {
 		return fmt.Errorf("write temp file: %w", err)
+	}
+
+	if f, openErr := os.OpenFile(tmpFile, os.O_WRONLY, 0); openErr == nil {
+		_ = f.Sync()
+		f.Close()
 	}
 
 	err = os.Rename(tmpFile, filename)
@@ -72,19 +77,19 @@ func Load(filename string, password []byte) (domain.Vault, error) {
 	defer lock.Unlock()
 
 	encrypted, err := os.ReadFile(filename)
+	defer common.ZeroBytes(encrypted)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return vault, common.ErrNotFound
 		}
 		return vault, fmt.Errorf("%w: %v", common.ErrReadVaultFile, err)
 	}
-	defer common.ZeroBytes(encrypted)
 
 	data, emp, err := crypto.Decrypt(encrypted, password)
+	defer common.ZeroBytes(data)
 	if err != nil {
 		return vault, err
 	}
-	defer common.ZeroBytes(data)
 
 	err = json.Unmarshal(data, &vault)
 	if err != nil {

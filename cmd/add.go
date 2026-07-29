@@ -22,28 +22,28 @@ var addCmd = &cobra.Command{
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		record, err := inputService(addGenerate, args...)
-		if err != nil {
-			if errors.Is(err, common.ErrCanceled) {
-				fmt.Println(common.Red("Cancelled"))
-				return nil
-			}
-			return err
-		}
 		defer common.ZeroBytes(record.Service)
 		defer common.ZeroBytes(record.Login)
 		defer common.ZeroBytes(record.Note)
 		defer common.ZeroBytes(record.Password)
+		if err != nil {
+			if errors.Is(err, common.ErrCanceled) {
+				common.RedPrintln("Cancelled")
+				return nil
+			}
+			return err
+		}
 
 		if err := vaultService.AddRecord(record, password); err != nil {
 			if errors.Is(err, common.ErrDuplicate) {
-				fmt.Println(common.Yellow("Service already exists."))
-				fmt.Println(common.Yellow("Use 'service:tag' for multiple accounts, e.g.:"))
+				common.YellowPrintln("Service already exists.")
+				common.YellowPrintln("Use 'service:tag' for multiple accounts, e.g.:")
 				fmt.Printf("  upass add %s:work\n", record.Service)
 			}
 
@@ -52,7 +52,7 @@ var addCmd = &cobra.Command{
 
 		saveServicesCache(vaultService.ListServices())
 
-		fmt.Println(common.Green("Record added successfully"))
+		common.GreenPrintln("Record added successfully")
 		return nil
 	},
 }
@@ -97,31 +97,31 @@ func inputService(generate bool, args ...string) (domain.Record, error) {
 	var password []byte
 	if generate {
 		password, err = interactiveGenerate()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return record, err
 		}
 
 		if password == nil {
-			return record, fmt.Errorf("password generation cancelled")
+			return record, common.ErrCanceled
 		}
 	} else {
 		password, err = inputPass("Input password: ")
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return record, err
 		}
 
 		passwordAgain, err := inputPass("Confirm the password: ")
+		defer common.ZeroBytes(passwordAgain)
 		if err != nil {
-			common.ZeroBytes(password)
 			return record, err
 		}
-		defer common.ZeroBytes(passwordAgain)
 
 		if !bytes.Equal(password, passwordAgain) {
 			return record, common.ErrNotMatched
 		}
 	}
-	defer common.ZeroBytes(password)
 
 	fmt.Print("Note (optional): ")
 	note, err := readLine()
@@ -130,9 +130,9 @@ func inputService(generate bool, args ...string) (domain.Record, error) {
 	}
 
 	if note != "" {
-		fmt.Println(common.Cyan("| Service: %s | Login: %s | Note: %s |", service, login, note))
+		common.CyanPrintf("| Service: %s | Login: %s | Note: %s |\n", service, login, note)
 	} else {
-		fmt.Println(common.Cyan("| Service: %s | Login: %s |", service, login))
+		common.CyanPrintf("| Service: %s | Login: %s |\n", service, login)
 	}
 
 	fmt.Print("Confirm? (y/n): ")

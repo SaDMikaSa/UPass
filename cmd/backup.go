@@ -31,16 +31,16 @@ var backupListCmd = &cobra.Command{
 		}
 
 		if len(backups) == 0 {
-			fmt.Println(common.Yellow("No backups found"))
+			common.YellowPrintln("No backups found")
 			fmt.Println("Backups are created automatically when the vault is saved.")
 			fmt.Printf("Backup directory: %s\n", config.Directory)
 			return nil
 		}
 
-		fmt.Println(common.Cyan("Available backups:"))
+		common.CyanPrintln("Available backups:")
 		fmt.Printf("Directory: %s\n\n", config.Directory)
 		for i, b := range backups {
-			fmt.Printf("%s. %s\n", common.Green("%d", i+1), common.Cyan(filepath.Base(b.Path)))
+			fmt.Printf("%d. %s\n", i+1, filepath.Base(b.Path))
 			fmt.Printf("   Size: %d bytes | Date: %s\n", b.Size, b.ModTime.Format("2006-01-02 15:04:05"))
 		}
 
@@ -63,10 +63,10 @@ A pre-restore backup of the current vault will be saved automatically.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
+		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
-		defer common.ZeroBytes(password)
 
 		num, err := strconv.Atoi(args[0])
 		if err != nil || num < 1 {
@@ -90,16 +90,16 @@ A pre-restore backup of the current vault will be saved automatically.`,
 		backup := backups[num-1]
 
 		fmt.Println()
-		fmt.Println(common.Yellow("⚠️  WARNING: This will permanently overwrite your current vault!"))
-		fmt.Println(common.Yellow("    Any records added after this backup's date will be LOST."))
+		common.YellowPrintln("⚠️  WARNING: This will permanently overwrite your current vault!")
+		common.YellowPrintln("    Any records added after this backup's date will be LOST.")
 		fmt.Println()
-		fmt.Printf("Backup to restore: %s\n", common.Cyan(filepath.Base(backup.Path)))
+		fmt.Printf("Backup to restore: %s\n", filepath.Base(backup.Path))
 		fmt.Printf("Backup date: %s\n", backup.ModTime.Format("2006-01-02 15:04:05"))
 		fmt.Println("A pre-restore backup of the current vault will be saved automatically.")
 		fmt.Print("Continue? (y/n): ")
 
 		if !readConfirmation() {
-			fmt.Println(common.Red("Cancelled"))
+			common.RedPrintln("Cancelled")
 			return nil
 		}
 
@@ -111,7 +111,9 @@ A pre-restore backup of the current vault will be saved automatically.`,
 			return fmt.Errorf("vault restored on disk, but failed to unlock it with current password: %w. You may need to use 'upass recover'", err)
 		}
 
-		fmt.Println(common.Green("Vault restored and reloaded successfully!"))
+		saveServicesCache(vaultService.ListServices())
+
+		common.GreenPrintln("Vault restored and reloaded successfully!")
 		return nil
 	},
 }
@@ -127,7 +129,7 @@ var backupCreateCmd = &cobra.Command{
 			return fmt.Errorf("create backup: %w", err)
 		}
 
-		fmt.Println(common.Green("Backup created successfully!"))
+		common.GreenPrintln("Backup created successfully!")
 		fmt.Printf("Location: %s\n", config.Directory)
 		return nil
 	},

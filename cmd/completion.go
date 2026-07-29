@@ -61,15 +61,15 @@ var completionInstallCmd = &cobra.Command{
 		var shell string
 		if installShell != "" {
 			shell = installShell
-			fmt.Println(common.Cyan("Using forced shell: %s", shell))
+			fmt.Printf("Using forced shell: %s\n", shell)
 		} else {
 			shell = detectShell()
 			if shell == "" {
-				fmt.Println(common.Yellow("⚠️  Could not detect shell. Please use --shell flag:"))
+				common.YellowPrintln("⚠️ Could not detect shell. Please use --shell flag:")
 				fmt.Println(" upass completion install --shell fish")
 				return nil
 			}
-			fmt.Println(common.Cyan("Detected shell: %s", shell))
+			fmt.Printf("Detected shell: %s\n", shell)
 		}
 
 		home, err := os.UserHomeDir()
@@ -83,14 +83,14 @@ var completionInstallCmd = &cobra.Command{
 			os.MkdirAll(dir, 0755)
 			path := filepath.Join(dir, "upass")
 			rootCmd.GenBashCompletionFile(path)
-			fmt.Println(common.Green("Bash completion installed to %s", path))
+			common.GreenPrintf("Bash completion installed to %s\n", path)
 
 		case "zsh":
 			dir := filepath.Join(home, ".zfunc")
 			os.MkdirAll(dir, 0755)
 			path := filepath.Join(dir, "_upass")
 			rootCmd.GenZshCompletionFile(path)
-			fmt.Println(common.Green("Zsh completion installed to %s", path))
+			common.GreenPrintf("Zsh completion installed to %s\n", path)
 			fmt.Println("   Make sure ~/.zshrc contains:")
 			fmt.Println("     fpath=(~/.zfunc $fpath)")
 			fmt.Println("     autoload -Uz compinit && compinit")
@@ -100,20 +100,21 @@ var completionInstallCmd = &cobra.Command{
 			os.MkdirAll(dir, 0755)
 			path := filepath.Join(dir, "upass.fish")
 			rootCmd.GenFishCompletionFile(path, true)
-			fmt.Println(common.Green("Fish completion installed to %s", path))
+			common.GreenPrintf("Fish completion installed to %s\n", path)
 
 		default:
-			fmt.Println(common.Yellow("Unknown shell. Completion not installed."))
+			common.YellowPrintln("Unknown shell. Completion not installed.")
 			fmt.Println("Use 'upass completion [bash|zsh|fish]' for manual setup.")
 		}
 
 		if err := ensureShellConfig(shell, home); err != nil {
-			fmt.Println(common.Yellow("Could not auto-configure shell: %v", err))
+			common.YellowPrintf("Could not auto-configure shell: %v\n", err)
 			fmt.Println("   Please configure your shell manually as shown above.")
 		}
 
-		fmt.Println(common.Green("upass installed to %s", filepath.Join(home, ".local", "bin", "upass")))
-		fmt.Println(" Open a new terminal and run: upass init")
+		common.GreenPrintf("upass installed to %s\n", filepath.Join(home, ".local", "bin", "upass"))
+		fmt.Println()
+		fmt.Println("Open a new terminal and run: upass init")
 		return nil
 	},
 }
@@ -246,7 +247,7 @@ func installBinary() error {
 	}
 
 	if _, err := os.Stat(targetPath); err == nil {
-		fmt.Println(common.Yellow("Warning: %s already exists and will be overwritten.", targetPath))
+		common.YellowPrintf("Warning: %s already exists and will be overwritten.\n", targetPath)
 	}
 
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
@@ -317,7 +318,7 @@ func ensureShellConfig(shell string, homeDir string) error {
 	var existingContent string
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println(common.Yellow("Creating %s to configure PATH...", configPath))
+			common.YellowPrintf("Creating %s to configure PATH...\n", configPath)
 			if shell == "fish" {
 				os.MkdirAll(filepath.Dir(configPath), 0755)
 			}
@@ -344,12 +345,12 @@ func ensureShellConfig(shell string, homeDir string) error {
 	}
 
 	if len(linesToAdd) > 0 {
-		fmt.Println(common.Yellow("Automatically configuring %s for PATH and completion...", shell))
+		common.YellowPrintf("Automatically configuring %s for PATH and completion...\n", shell)
 		if err := appendLinesToFile(configPath, linesToAdd); err != nil {
 			return err
 		}
-		fmt.Println(common.Green("Configuration added to %s", configPath))
-		fmt.Println(common.Yellow("Please restart your terminal or run: source %s", configPath))
+		common.GreenPrintf("Configuration added to %s\n", configPath)
+		common.YellowPrintf("Please restart your terminal or run: source %s", configPath)
 	}
 
 	return nil
@@ -367,7 +368,7 @@ func ensureWindowsConfig(homeDir string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(common.Yellow("IMPORTANT: Add the following directory to your system PATH:"))
+	common.YellowPrintln("IMPORTANT: Add the following directory to your system PATH:")
 	fmt.Printf("   %s\n", binDir)
 	fmt.Println()
 	fmt.Println("   To do this:")
