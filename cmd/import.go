@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/SaDMikaSa/UPass/internal/domain"
@@ -15,83 +17,173 @@ var importFile string
 
 var importCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Import records from a JSON file",
-	Long: `Import records from a JSON file (e.g., exported from UPass or another manager).
-	Duplicates will be skipped with a warning.`,
+	Short: "Import records from a JSON or CSV file",
+	Long:  `Import records from a JSON or CSV file (e.g., exported from Bitwarden or UPass). Duplicates will be skipped with a warning.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := unlock()
-		defer common.ZeroBytes(password)
 		if err != nil {
 			return err
 		}
+		defer common.ZeroBytes(password)
 
-		fileData, err := os.ReadFile(importFile)
-		defer common.ZeroBytes(fileData)
-		if err != nil {
-			return fmt.Errorf("failed to read import file: %w", err)
+		if strings.HasSuffix(strings.ToLower(importFile), ".csv") {
+			return importFromCSV(importFile, password)
 		}
-
-		var importData []exportRecord
-		if err := json.Unmarshal(fileData, &importData); err != nil {
-			return fmt.Errorf("failed to parse JSON: %w", err)
-		}
-
-		if len(importData) == 0 {
-			common.YellowPrintln("No records found in the import file.")
-			return nil
-		}
-
-		fmt.Printf("Found %d records to import. Processing...\n", len(importData))
-
-		successCount := 0
-		skipCount := 0
-
-		for _, item := range importData {
-			record := domain.Record{
-				Service:  []byte(item.Service),
-				Login:    []byte(item.Login),
-				Password: make([]byte, len(item.Password)),
-				Note:     []byte(item.Note),
-			}
-			copy(record.Password, item.Password)
-
-			if item.Service == "" || item.Login == "" {
-				skipCount++
-				continue
-			}
-
-			err := vaultService.AddRecord(record, password)
-			common.ZeroBytes(record.Service)
-			common.ZeroBytes(record.Login)
-			common.ZeroBytes(record.Password)
-			common.ZeroBytes(record.Note)
-			if err != nil {
-				if errors.Is(err, common.ErrDuplicate) {
-					fmt.Printf("  [SKIP] %s (already exists)\n", item.Service)
-					skipCount++
-					continue
-				}
-				fmt.Printf("  [ERROR] %s: %v\n", item.Service, err)
-				continue
-			}
-
-			successCount++
-		}
-
-		saveServicesCache(vaultService.ListServices())
-
-		fmt.Println()
-		common.GreenPrintln("Import completed!")
-		fmt.Printf("Successfully imported: %d\n", successCount)
-		if skipCount > 0 {
-			fmt.Printf("Skipped (duplicates): %d\n", skipCount)
-		}
-
-		return nil
+		return importFromJSON(importFile, password)
 	},
 }
 
+func importFromJSON(filepath string, password []byte) error {
+	fileData, err := os.ReadFile(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to read import file: %w", err)
+	}
+	defer common.ZeroBytes(fileData)
+
+	var importData []struct {
+		Service  string `json:"service"`
+		Login    string `json:"login"`
+		Password string `json:"password"`
+		Note     string `json:"note,omitempty"`
+	}
+
+	if err := json.Unmarshal(fileData, &importData); err != nil {
+		return fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	var records []domain.Record
+	for _, item := range importData {
+		records = append(records, domain.Record{
+			Service:  []byte(item.Service),
+			Login:    []byte(item.Login),
+			Password: []byte(item.Password),
+			Note:     []byte(item.Note),
+		})
+	}
+
+	return processImportRecords(records, password)
+}
+
+func importFromCSV(filepath string, password []byte) error {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to open CSV file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+
+	header, err := reader.Read()
+	if err != nil {
+		return fmt.Errorf("failed to read CSV header: %w", err)
+	}
+
+	colIndex := make(map[string]int)
+	for i, col := range header {
+		colIndex[strings.ToLower(strings.TrimSpace(col))] = i
+	}
+
+	requiredCols := []string{"name", "login", "password"}
+	for _, col := range requiredCols {
+		if _, exists := colIndex[col]; !exists {
+			return fmt.Errorf("CSV is missing required column: '%s'", col)
+		}
+	}
+
+	var records []domain.Record
+	for {
+		row, err := reader.Read()
+		if err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return fmt.Errorf("failed to read CSV row: %w", err)
+		}
+
+		serviceBytes := []byte(strings.TrimSpace(row[colIndex["name"]]))
+		loginBytes := []byte(strings.TrimSpace(row[colIndex["login"]]))
+		passBytes := []byte(row[colIndex["password"]])
+
+		var noteBytes []byte
+		if idx, ok := colIndex["notes"]; ok && idx < len(row) {
+			noteBytes = []byte(strings.TrimSpace(row[idx]))
+		}
+
+		records = append(records, domain.Record{
+			Service:  serviceBytes,
+			Login:    loginBytes,
+			Password: passBytes,
+			Note:     noteBytes,
+		})
+	}
+
+	return processImportRecords(records, password)
+}
+
+func processImportRecords(records []domain.Record, password []byte) error {
+	if len(records) == 0 {
+		common.YellowPrintln("No records found in the import file.")
+		return nil
+	}
+
+	fmt.Printf("Found %d records to import. Processing...\n", len(records))
+
+	successCount := 0
+	skipCount := 0
+	errorCount := 0
+
+	for i := range records {
+		rec := records[i]
+
+		serviceName := string(rec.Service)
+
+		if len(rec.Service) == 0 || len(rec.Login) == 0 {
+			skipCount++
+			common.ZeroBytes(rec.Service)
+			common.ZeroBytes(rec.Login)
+			common.ZeroBytes(rec.Password)
+			common.ZeroBytes(rec.Note)
+			continue
+		}
+
+		err := vaultService.AddRecord(rec, password)
+
+		common.ZeroBytes(rec.Service)
+		common.ZeroBytes(rec.Login)
+		common.ZeroBytes(rec.Password)
+		common.ZeroBytes(rec.Note)
+
+		if err != nil {
+			if errors.Is(err, common.ErrDuplicate) {
+				fmt.Printf("  [SKIP] %s (already exists)\n", serviceName)
+				skipCount++
+			} else {
+				fmt.Printf("  [ERROR] %s: %v\n", serviceName, err)
+				errorCount++
+			}
+			continue
+		}
+
+		successCount++
+	}
+
+	saveServicesCache(vaultService.ListServices())
+
+	fmt.Println()
+	common.GreenPrintln("Import completed!")
+	fmt.Printf("Successfully imported: %d\n", successCount)
+	if skipCount > 0 {
+		fmt.Printf("Skipped (empty or duplicates): %d\n", skipCount)
+	}
+	if errorCount > 0 {
+		fmt.Printf("Errors: %d\n", errorCount)
+	}
+
+	return nil
+}
+
 func init() {
-	importCmd.Flags().StringVarP(&importFile, "file", "f", "upass_export.json", "Input file path")
+	importCmd.Flags().StringVarP(&importFile, "file", "f", "", "Input file path (JSON or CSV)")
+	_ = importCmd.MarkFlagRequired("file")
 	rootCmd.AddCommand(importCmd)
 }

@@ -345,6 +345,18 @@ func ensureShellConfig(shell string, homeDir string) error {
 	}
 
 	if len(linesToAdd) > 0 {
+		if len(linesToAdd) > 0 {
+			common.YellowPrintln("⚠️  UPass needs to modify your shell configuration to add PATH and auto-completion.")
+			common.YellowPrintf("   The following file will be updated: %s\n", configPath)
+			common.YellowPrintln("   If you ever need to undo this, simply open the file and remove the lines added by UPass.")
+			fmt.Print("   Do you want to proceed? (y/n): ")
+		}
+
+		if !readConfirmation() {
+			common.YellowPrintln("Skipped. You will need to configure your shell manually.")
+			return nil
+		}
+
 		common.YellowPrintf("Automatically configuring %s for PATH and completion...\n", shell)
 		if err := appendLinesToFile(configPath, linesToAdd); err != nil {
 			return err

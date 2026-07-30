@@ -8,11 +8,13 @@ A secure, local-first password manager for the command line.
 - 🛡️ **Built-in Health Check** — Audit weak, duplicate, and breached (HIBP) passwords with k-anonymity.
 - 💾 **Auto-backups** — Every save automatically creates a versioned backup. No Git required.
 - ⚡ **Single Binary** — No GPG, no Node.js, no background daemon, no cloud dependency.
-- 👁️ 👁️ **Privacy-first** — Everything stays encrypted on your local machine. Secrets are actively wiped from RAM after use.
+- 👁️ **Privacy-first** — Everything stays encrypted on your local machine. Secrets are actively wiped from RAM after use.
 - 📋 **Clipboard Support** — Passwords are copied to clipboard, never displayed in plain text by default.
 - 🏷️ **Multiple Accounts** — Use tags for the same service: `github:work`, `github:personal`.
 - 🐚 **Smart Auto-completion** — Native support for Bash, Zsh, and Fish with automatic PATH and config setup.
 - 🎲 **Interactive Generation** — Refine generated passwords on the fly by dynamically excluding unwanted characters.
+- 🗄️ **Multi-Vault Support** — Easily manage separate contexts (e.g., `default`, `work`, `personal`) with instant switching.
+- 📥 **Import/Export** - Supports exporting and importing your vault in both JSON (native format) and CSV (Bitwarden-compatible format).
 
 ## Install
 
@@ -91,9 +93,23 @@ upass backup restore 2
 upass generate
 upass generate -l 32 --no-symbols
 
-# import/export
+# Import/Export
 upass export -f backup.json
+upass export -f backup.csv
 upass import -f backup.json
+upass import -f backup.csv
+
+# Switch to a new vault context (creates config entry automatically)
+upass --vault work init
+
+# Switch vault
+upass --vault default
+upass --vault work
+
+# You can also use absolute paths for one-off operations without changing the active context
+upass --vault /tmp/emergency.json list
+
+
 ```
 
 ## Recovery
