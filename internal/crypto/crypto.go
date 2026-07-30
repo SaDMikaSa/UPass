@@ -12,10 +12,14 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// DeriveKey derives a 32-byte encryption key from the given password and salt
-// using Argon2id with parameters taken from common configuration.
-func DeriveKey(password []byte, salt []byte) []byte {
-	return argon2.IDKey(password, salt, common.Argon2Time, common.Argon2Memory, common.Argon2Threads, 32)
+func DeriveKey(password []byte, salt []byte) ([]byte, error) {
+	key := argon2.IDKey(password, salt, common.Argon2Time, common.Argon2Memory, common.Argon2Threads, 32)
+
+	if err := common.LockMemory(key); err != nil {
+		fmt.Printf("Warning: could not lock memory for derived key: %v\n", err)
+	}
+
+	return key, nil
 }
 
 // GenerateSalt returns a securely generated random salt of size common.SaltSize.
@@ -39,8 +43,11 @@ func Encrypt(plaintext []byte, password []byte, encryptedMasterPass []byte) ([]b
 		return nil, err
 	}
 
-	key := DeriveKey(password, salt)
+	key, err := DeriveKey(password, salt)
 	defer common.ZeroBytes(key)
+	if err != nil {
+		return nil, fmt.Errorf("derive key: %w", err)
+	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -55,9 +62,13 @@ func Encrypt(plaintext []byte, password []byte, encryptedMasterPass []byte) ([]b
 	nonceSize := gcm.NonceSize()
 	nonce := make([]byte, nonceSize)
 	_, err = rand.Read(nonce)
-	defer common.ZeroBytes(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", common.ErrGenerateNonce, err)
+	}
+	defer common.ZeroBytes(nonce)
+
+	if err := common.LockMemory(nonce); err != nil {
+		fmt.Printf("Warning: could not lock memory for nonce: %v\n", err)
 	}
 
 	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
@@ -131,8 +142,11 @@ func Decrypt(fullData []byte, password []byte) (plaintext []byte, encryptedMaste
 	nonce := fullData[offset+common.SaltSize : offset+common.SaltSize+12]
 	ciphertext := fullData[offset+common.SaltSize+12:]
 
-	key := DeriveKeyWithParams(password, salt, uint32(fileTime), uint32(fileMemory), common.Argon2Threads)
+	key, err := DeriveKeyWithParams(password, salt, uint32(fileTime), uint32(fileMemory), common.Argon2Threads)
 	defer common.ZeroBytes(key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("derive key: %w", err)
+	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -156,9 +170,12 @@ func Decrypt(fullData []byte, password []byte) (plaintext []byte, encryptedMaste
 	return plaintext, emp, nil
 }
 
-// DeriveKeyWithParams derives a key using explicit Argon2 parameters. This
-// is used when decrypting older vaults that stored the KDF parameters in the
-// file header.
-func DeriveKeyWithParams(password []byte, salt []byte, time uint32, memory uint32, threads uint8) []byte {
-	return argon2.IDKey(password, salt, time, memory, threads, 32)
+func DeriveKeyWithParams(password []byte, salt []byte, time uint32, memory uint32, threads uint8) ([]byte, error) {
+	key := argon2.IDKey(password, salt, time, memory, threads, 32)
+
+	if err := common.LockMemory(key); err != nil {
+		fmt.Printf("Warning: could not lock memory for derived key: %v\n", err)
+	}
+
+	return key, nil
 }

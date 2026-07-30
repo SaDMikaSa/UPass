@@ -12,6 +12,13 @@ import (
 )
 
 func Save(filename string, vault domain.Vault, password []byte) error {
+	if _, err := os.Stat(filename); err == nil {
+		config := DefaultBackupConfig()
+		if backupErr := CreateBackup(filename, config); backupErr != nil {
+			return fmt.Errorf("failed to create pre-write backup, aborting save for safety: %w", backupErr)
+		}
+	}
+
 	lock := flock.New(filename)
 	locked, err := lock.TryLock()
 	if err != nil {
@@ -23,21 +30,14 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	defer lock.Unlock()
 
 	data, err := json.Marshal(vault)
-	defer common.ZeroBytes(data)
 	if err != nil {
 		return err
 	}
+	defer common.ZeroBytes(data)
 
 	encrypted, err := crypto.Encrypt(data, password, vault.EncryptedMasterPass)
 	if err != nil {
 		return err
-	}
-
-	if _, err := os.Stat(filename); err == nil {
-		config := DefaultBackupConfig()
-		if backupErr := CreateBackup(filename, config); backupErr != nil {
-			return fmt.Errorf("failed to create pre-write backup, aborting save for safety: %w", backupErr)
-		}
 	}
 
 	tmpFile := filename + ".tmp"

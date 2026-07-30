@@ -47,6 +47,10 @@ func inputPass(prompt string) ([]byte, error) {
 
 	fmt.Println()
 
+	if err := common.LockMemory(pass); err != nil {
+		fmt.Printf("Warning: could not lock memory for password: %v\n", err)
+	}
+
 	return pass, nil
 }
 
@@ -106,5 +110,6 @@ func newMasterPassword() ([]byte, error) {
 			return nil, common.ErrCanceled
 		}
 	}
+
 	return pass, nil
 }

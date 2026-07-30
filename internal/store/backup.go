@@ -61,8 +61,20 @@ func CreateBackup(vaultPath string, config BackupConfig) error {
 		return fmt.Errorf("create backup dir: %w", err)
 	}
 
-	data, err := os.ReadFile(vaultPath)
-	if err != nil {
+	var data []byte
+	var err error
+
+	for i := 0; i < 3; i++ {
+		data, err = os.ReadFile(vaultPath)
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "process cannot access the file") {
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+
 		return fmt.Errorf("read vault for backup: %w", err)
 	}
 

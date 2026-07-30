@@ -31,8 +31,11 @@ func EncryptMasterPassword(masterPassword []byte, recoveryKey []byte) ([]byte, e
 		return nil, err
 	}
 
-	derivedKey := DeriveKey(recoveryKey, salt)
+	derivedKey, err := DeriveKey(recoveryKey, salt)
 	defer common.ZeroBytes(derivedKey)
+	if err != nil {
+		return nil, err
+	}
 
 	block, err := aes.NewCipher(derivedKey)
 	if err != nil {
@@ -72,8 +75,11 @@ func DecryptMasterPassword(encrypted []byte, recoveryKey []byte) ([]byte, error)
 	nonce := encrypted[common.SaltSize : common.SaltSize+12]
 	ciphertext := encrypted[common.SaltSize+12:]
 
-	derivedKey := DeriveKey(recoveryKey, salt)
+	derivedKey, err := DeriveKey(recoveryKey, salt)
 	defer common.ZeroBytes(derivedKey)
+	if err != nil {
+		return nil, err
+	}
 
 	block, err := aes.NewCipher(derivedKey)
 	if err != nil {
