@@ -15,7 +15,7 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	if _, err := os.Stat(filename); err == nil {
 		config := DefaultBackupConfig()
 		if backupErr := CreateBackup(filename, config); backupErr != nil {
-			return fmt.Errorf("failed to create pre-write backup, aborting save for safety: %w", backupErr)
+			return fmt.Errorf("failed to create pre-write backup: %w", backupErr)
 		}
 	}
 
@@ -41,18 +41,16 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	}
 
 	tmpFile := filename + ".tmp"
-	err = os.WriteFile(tmpFile, encrypted, 0600)
-	if err != nil {
+	if err := os.WriteFile(tmpFile, encrypted, 0600); err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 
-	if f, openErr := os.OpenFile(tmpFile, os.O_WRONLY, 0); openErr == nil {
+	if f, err := os.OpenFile(tmpFile, os.O_WRONLY, 0); err == nil {
 		_ = f.Sync()
 		f.Close()
 	}
 
-	err = os.Rename(tmpFile, filename)
-	if err != nil {
+	if err := os.Rename(tmpFile, filename); err != nil {
 		os.Remove(tmpFile)
 		return fmt.Errorf("rename temp file: %w", err)
 	}

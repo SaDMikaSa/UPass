@@ -1,3 +1,5 @@
+//go:build !windows
+
 package store
 
 import (
@@ -9,7 +11,7 @@ import (
 
 func TestStore(t *testing.T) {
 	dir := t.TempDir()
-	filepath := dir + "/test.json"
+	vaultPath := dir + "/test.json"
 	password := []byte("masterpass")
 
 	vault := domain.Vault{Records: make(map[string]domain.Record)}
@@ -24,17 +26,17 @@ func TestStore(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	err = Save(filepath, vault, password)
+	err = Save(vaultPath, vault, password)
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
 
-	_, err = os.Stat(filepath)
+	_, err = os.Stat(vaultPath)
 	if err != nil {
 		t.Fatalf("file not created: %v", err)
 	}
 
-	vault, err = Load(filepath, password)
+	vault, err = Load(vaultPath, password)
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
