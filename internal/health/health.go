@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/SaDMikaSa/UPass/internal/domain"
-	"github.com/nbutton23/zxcvbn-go"
+	"github.com/SaDMikaSa/UPass/pkg/tyuiop"
 )
 
 var client = &http.Client{
@@ -46,20 +46,17 @@ type ReusedLogin struct {
 	Services []string
 }
 
-// CheckWeakPasswords evaluates password strength for each record using
-// zxcvbn and returns those with score < minScore.
 func CheckWeakPasswords(records map[string]domain.Record, minScore int) []WeakPasswordResult {
 	var results []WeakPasswordResult
 
 	for _, rec := range records {
-		passwordStr := string(rec.Password)
-		strength := zxcvbn.PasswordStrength(passwordStr, nil)
+		strength := tyuiop.AnalyzeLocalStrength(rec.Password)
 		if strength.Score < minScore {
 			results = append(results, WeakPasswordResult{
 				Service:      string(rec.Service),
 				Score:        strength.Score,
-				CrackTime:    strength.CrackTimeDisplay,
-				CrackSeconds: strength.CrackTime,
+				CrackTime:    strength.CrackTime,
+				CrackSeconds: strength.CrackSeconds,
 			})
 		}
 	}

@@ -15,6 +15,7 @@ A secure, local-first password manager for the command line.
 - 🎲 **Interactive Generation** — Refine generated passwords on the fly by dynamically excluding unwanted characters.
 - 🗄️ **Multi-Vault Support** — Easily manage separate contexts (e.g., `default`, `work`, `personal`) with instant switching.
 - 📥 **Import/Export** - Supports exporting and importing your vault in both JSON (native format) and CSV (Bitwarden-compatible format).
+- 🧠 **Custom Strength Engine** — Evaluates password strength locally using a custom, zero-allocation engine that operates strictly on byte slices, preventing secret leakage into the Go garbage collector.
 
 ## Install
 

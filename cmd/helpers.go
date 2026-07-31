@@ -9,7 +9,7 @@ import (
 
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/SaDMikaSa/UPass/internal/store"
-	"github.com/nbutton23/zxcvbn-go"
+	"github.com/SaDMikaSa/UPass/pkg/tyuiop"
 	"golang.org/x/term"
 )
 
@@ -100,9 +100,9 @@ func newMasterPassword() ([]byte, error) {
 		return nil, err
 	}
 
-	strength := zxcvbn.PasswordStrength(string(pass), nil)
+	strength := tyuiop.AnalyzeLocalStrength(pass)
 	if strength.Score < common.MinStrengthScore {
-		common.YellowPrintf("⚠️  Weak password (score: %d/4, crack time: %s)\n", strength.Score, strength.CrackTimeDisplay)
+		common.YellowPrintf("⚠️  Weak password (score: %d/4, crack time: %s)\n", strength.Score, strength.CrackTime)
 		fmt.Print("Continue anyway? (y/n): ")
 
 		if !readConfirmation() {

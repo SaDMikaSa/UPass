@@ -3,13 +3,14 @@ name: Release Build
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     name: Build for ${{ matrix.os }} (${{ matrix.arch }})
-
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         arch: [amd64, arm64]
@@ -26,31 +27,28 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.26.0"
+          go-version: "1.22"
           cache: true
 
       - name: Run tests
-        run: go test -v ./...
+        run: go test -v -race ./...
 
       - name: Build binary
+        shell: bash
         env:
           GOOS: ${{ matrix.os == 'macos-latest' && 'darwin' || matrix.os == 'ubuntu-latest' && 'linux' || 'windows' }}
           GOARCH: ${{ matrix.arch }}
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            BINARY_NAME="upass-windows-${{ matrix.arch }}.exe"
-          else
-            BINARY_NAME="upass-${{ env.GOOS }}-${{ matrix.arch }}"
+          # Определяем расширение файла (.exe для Windows)
+          EXT=""
+          if [ "${{ env.GOOS }}" = "windows" ]; then
+            EXT=".exe"
           fi
+
+          BINARY_NAME="upass-${{ env.GOOS }}-${{ matrix.arch }}${EXT}"
 
           echo "Building $BINARY_NAME..."
           go build -ldflags="-s -w" -o "$BINARY_NAME" .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: upass-${{ matrix.os }}-${{ matrix.arch }}
-          path: upass-*
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v1
