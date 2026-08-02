@@ -1,9 +1,5 @@
 package tyuiop
 
-import (
-	"math"
-)
-
 func AnalyzeBytes(data []byte) *PasswordStats {
 	var stats PasswordStats
 	stats.Length = len(data)
@@ -51,43 +47,24 @@ func AnalyzeLocalStrength(data []byte) *PasswordStrength {
 		return &PasswordStrength{Score: 0, CrackTime: "instantly", CrackSeconds: 0, Stats: &PasswordStats{}}
 	}
 
+	if !ValidateASCIIOnly(data) {
+		return &PasswordStrength{Score: 0, CrackTime: "instantly", CrackSeconds: 0, Stats: &PasswordStats{}}
+	}
+
 	stats := AnalyzeBytes(data)
-	patterns := append(findRepeats(data), findKeyboardPatterns(data)...)
+
+	patterns := findRepeats(data)
+	patterns = append(patterns, findKeyboardPatterns(data)...)
+	patterns = append(patterns, findCombinedPatterns(data)...)
 
 	if common := findCommonPassword(data); common != nil {
 		patterns = append(patterns, *common)
 	}
 
-	possibleChars := calculatePossibleChars(stats)
-	baseGuesses := math.Pow(float64(possibleChars), float64(stats.Length))
-
-	finalGuesses := applyPenalties(baseGuesses, patterns, stats)
-
-	diversityPenalty := 1.0
-	charSets := 0
-	if stats.Digits > 0 {
-		charSets++
-	}
-	if stats.Lowers > 0 {
-		charSets++
-	}
-	if stats.Uppers > 0 {
-		charSets++
-	}
-	if stats.Specials > 0 {
-		charSets++
-	}
-
-	if charSets == 1 {
-		diversityPenalty = 0.0001
-	} else if charSets == 2 {
-		diversityPenalty = 0.01
-	}
-
-	finalGuesses *= diversityPenalty
+	finalGuesses := calculateEntropy(data, patterns, stats)
 
 	score := calculateScore(finalGuesses)
-	crackTime, crackSeconds := calculateCrackTimeWithSeconds(finalGuesses)
+	crackTime, crackSeconds := calculateCrackTimeWithSeconds(finalGuesses, "bcrypt")
 	feedback := generateFeedback(stats, patterns, score)
 
 	return &PasswordStrength{
