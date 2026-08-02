@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,8 +13,6 @@ import (
 	"github.com/SaDMikaSa/UPass/pkg/tyuiop"
 	"golang.org/x/term"
 )
-
-var stdinScanner = bufio.NewScanner(os.Stdin)
 
 // unlock prompts the user for the master password and unlocks the vault
 // service. On success it returns the entered password (caller should zero it
@@ -48,22 +47,23 @@ func inputPass(prompt string) ([]byte, error) {
 	fmt.Println()
 
 	if err := common.LockMemory(pass); err != nil {
-		fmt.Printf("Warning: could not lock memory for password: %v\n", err)
+		common.ZeroBytes(pass)
+		return nil, fmt.Errorf("could not lock memory for password (mlock failed: %w). Aborting to prevent swap leakage", err)
 	}
 
 	return pass, nil
 }
 
-// readLine reads a single trimmed line from stdin. It returns an error on
-// EOF or when the input scanner produces an error.
 func readLine() (string, error) {
-	if !stdinScanner.Scan() {
-		if err := stdinScanner.Err(); err != nil {
-			return "", fmt.Errorf("read input: %w", err)
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		if err == io.EOF {
+			return "", fmt.Errorf("EOF")
 		}
-		return "", fmt.Errorf("EOF")
+		return "", fmt.Errorf("read input: %w", err)
 	}
-	return strings.TrimSpace(stdinScanner.Text()), nil
+	return strings.TrimSpace(line), nil
 }
 
 // readConfirmation reads a yes/no confirmation from stdin and returns true
@@ -76,9 +76,6 @@ func readConfirmation() bool {
 	return ans == "y" || ans == "Y"
 }
 
-// saveServicesCache persists a small cache of service names into the
-// vault directory to speed up shell completion. This cache contains no
-// secrets and is stored with restrictive permissions.
 func saveServicesCache(services []string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -88,8 +85,14 @@ func saveServicesCache(services []string) {
 	cachePath := filepath.Join(home, store.DefaultVaultDir, cacheFileName)
 	data := strings.Join(services, "\n")
 
-	os.MkdirAll(filepath.Dir(cachePath), 0700)
-	os.WriteFile(cachePath, []byte(data), 0600)
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0700); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to create cache directory %s: %v\n", cachePath, err)
+		return
+	}
+
+	if err := os.WriteFile(cachePath, []byte(data), 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save completion cache to %s: %v\n", cachePath, err)
+	}
 }
 
 // promptNewMasterPassword reads and confirms a new master password.

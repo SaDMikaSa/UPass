@@ -23,6 +23,8 @@ var recoverCmd = &cobra.Command{
 		}
 		fmt.Println()
 
+		recoveryKeyBytes = bytes.TrimSpace(recoveryKeyBytes)
+
 		if err := common.LockMemory(recoveryKeyBytes); err != nil {
 			fmt.Printf("Warning: could not lock memory for recovery key: %v\n", err)
 		}

@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/SaDMikaSa/UPass/internal/common"
+	"github.com/SaDMikaSa/UPass/internal/crypto"
 	"github.com/SaDMikaSa/UPass/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -101,6 +103,14 @@ A pre-restore backup of the current vault will be saved automatically.`,
 		if !readConfirmation() {
 			common.RedPrintln("Cancelled")
 			return nil
+		}
+		backupData, err := os.ReadFile(backup.Path)
+		if err != nil {
+			return fmt.Errorf("read backup file: %w", err)
+		}
+
+		if _, _, err := crypto.Decrypt(backupData, password); err != nil {
+			return fmt.Errorf("backup validation failed: cannot decrypt with current password (file may be corrupted or from before a password change). Restore aborted to protect your current data")
 		}
 
 		if err := store.RestoreBackup(backup.Path, vaultService.Filename()); err != nil {

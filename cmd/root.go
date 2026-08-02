@@ -14,7 +14,7 @@ import (
 
 var (
 	vaultService  *service.VaultService
-	vaultPathFlag string // Глобальный флаг: принимает имя (work) или путь (/tmp/v.json)
+	vaultPathFlag string
 )
 
 func init() {
@@ -27,7 +27,6 @@ var rootCmd = &cobra.Command{
 	Long:  `UPass - local encrypted password manager. Securely store, add, and retrieve credentials.`,
 
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Командам, не требующим доступа к хранилищу, инициализация не нужна
 		if cmd.Name() == "completion" || (cmd.Parent() != nil && cmd.Parent().Name() == "completion") {
 			return nil
 		}
@@ -44,12 +43,14 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 
-	// Run вызывается, когда пользователь вводит "upass" без подкоманды
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		if vaultService != nil {
+			vaultService.Close()
+		}
+	},
+
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Если передан флаг --vault без команды, переключаем контекст и выходим
 		if vaultPathFlag != "" {
-			// resolveVaultPath() уже обновил конфиг в PersistentPreRunE
-			// Просто выводим сообщение
 			if strings.Contains(vaultPathFlag, ".json") || strings.Contains(vaultPathFlag, "/") || strings.Contains(vaultPathFlag, "\\") {
 				common.GreenPrintf("Using vault: %s\n", vaultPathFlag)
 			} else {
@@ -58,57 +59,51 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 
-		// Если флаг не переден, показываем help
 		return cmd.Help()
 	},
 }
 
-// resolveVaultPath определяет путь и обновляет конфиг при необходимости
 func resolveVaultPath() (string, error) {
 	targetName := "default"
 
-	// 1. Если передан флаг --vault
 	if vaultPathFlag != "" {
-		// Если это похоже на абсолютный/относительный путь, используем его как есть
 		if strings.Contains(vaultPathFlag, ".json") || strings.Contains(vaultPathFlag, "/") || strings.Contains(vaultPathFlag, "\\") {
 			return expandPath(vaultPathFlag), nil
 		}
-		// Иначе считаем это именем хранилища (например, "work" или "default")
 		targetName = vaultPathFlag
 	} else {
-		// 2. Если флаг не передан, берем активное хранилище из конфига
 		cfg, err := config.LoadConfig()
 		if err == nil && cfg.ActiveVault != "" {
 			targetName = cfg.ActiveVault
 		}
 	}
 
-	// Гарантируем существование директории для хранилищ
 	vaultsDir := config.GetVaultsDir()
 	if err := os.MkdirAll(vaultsDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create vaults directory: %w", err)
 	}
 
-	// 3. Если мы переключились на новое имя через флаг, сохраняем его в конфиг как активный
 	if vaultPathFlag != "" && !strings.Contains(vaultPathFlag, ".json") && !strings.Contains(vaultPathFlag, "/") {
 		cfg, _ := config.LoadConfig()
 		if cfg.ActiveVault != targetName {
 			cfg.ActiveVault = targetName
-			_ = config.SaveConfig(cfg) // Игнорируем ошибку сохранения, чтобы не ломать работу, если диск переполнен
+			if err := config.SaveConfig(cfg); err != nil {
+				return "", fmt.Errorf("failed to save active vault configuration: %w", err)
+			}
 		}
 	} else if vaultPathFlag == "" {
-		// Если флаг не передан и в конфиге пусто, инициализируем дефолт
 		cfg, _ := config.LoadConfig()
 		if cfg.ActiveVault == "" {
 			cfg.ActiveVault = "default"
-			_ = config.SaveConfig(cfg)
+			if err := config.SaveConfig(cfg); err != nil {
+				return "", fmt.Errorf("failed to save default vault configuration: %w", err)
+			}
 		}
 	}
 
 	return config.GetVaultPathByName(targetName), nil
 }
 
-// expandPath раскрывает тильду (~) в домашнюю директорию
 func expandPath(path string) string {
 	if len(path) > 0 && path[0] == '~' {
 		home, err := os.UserHomeDir()
@@ -119,7 +114,6 @@ func expandPath(path string) string {
 	return path
 }
 
-// Execute runs the root cobra command and sets up completion options.
 func Execute() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.CompletionOptions.DisableDescriptions = false

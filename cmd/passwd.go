@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/SaDMikaSa/UPass/internal/common"
+	"github.com/SaDMikaSa/UPass/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -41,10 +42,26 @@ var passwdCmd = &cobra.Command{
 			}
 		} else {
 			fmt.Println()
-			common.YellowPrintln("⚠️  WARNING: Recovery will be permanently disabled!")
-			common.YellowPrintln("If you forget the new master password, you will LOSE ACCESS to the vault forever.")
-			fmt.Print("Are you absolutely sure? (y/n): ")
-			if !readConfirmation() {
+			common.YellowPrintln("⚠️  WARNING: Recovery will be PERMANENTLY DISABLED!")
+			common.YellowPrintln("If you forget the new master password, you will LOSE ACCESS to the vault FOREVER.")
+			fmt.Println()
+
+			common.YellowPrintln("Creating a mandatory pre-destruction backup...")
+			config := store.DefaultBackupConfig()
+			if err := store.CreateBackup(vaultService.Filename(), config); err != nil {
+				return fmt.Errorf("failed to create mandatory backup: %w", err)
+			}
+			common.GreenPrintln("Backup created successfully.")
+			fmt.Println()
+
+			common.YellowPrintln("To proceed, you must type the word 'DESTROY' exactly as shown.")
+			fmt.Print("Type 'DESTROY' to confirm disabling recovery: ")
+
+			confirmation, err := readLine()
+			if err != nil {
+				return err
+			}
+			if confirmation != "DESTROY" {
 				common.RedPrintln("Cancelled")
 				return nil
 			}

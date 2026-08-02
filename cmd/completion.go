@@ -80,21 +80,24 @@ var completionInstallCmd = &cobra.Command{
 		switch shell {
 		case "bash":
 			dir := filepath.Join(home, ".local", "share", "bash-completion", "completions")
-			os.MkdirAll(dir, 0755)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create bash completion directory: %w", err)
+			}
 			path := filepath.Join(dir, "upass")
-			rootCmd.GenBashCompletionFile(path)
+			if err := rootCmd.GenBashCompletionFile(path); err != nil {
+				return fmt.Errorf("failed to generate bash completion file: %w", err)
+			}
 			common.GreenPrintf("Bash completion installed to %s\n", path)
 
 		case "zsh":
 			dir := filepath.Join(home, ".zfunc")
-			os.MkdirAll(dir, 0755)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create zsh completion directory: %w", err)
+			}
 			path := filepath.Join(dir, "_upass")
-			rootCmd.GenZshCompletionFile(path)
-			common.GreenPrintf("Zsh completion installed to %s\n", path)
-			fmt.Println("   Make sure ~/.zshrc contains:")
-			fmt.Println("     fpath=(~/.zfunc $fpath)")
-			fmt.Println("     autoload -Uz compinit && compinit")
-
+			if err := rootCmd.GenZshCompletionFile(path); err != nil {
+				return fmt.Errorf("failed to generate zsh completion file: %w", err)
+			}
 		case "fish":
 			dir := filepath.Join(home, ".config", "fish", "completions")
 			os.MkdirAll(dir, 0755)
@@ -166,10 +169,7 @@ func loadServicesCache() []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-// detectShell attempts to detect the user's CURRENT shell.
-// It uses a multi-tier approach: env vars -> parent process name -> login shell.
 func detectShell() string {
-	// 1. Проверяем переменные окружения (самый надежный способ, если они экспортированы)
 	if os.Getenv("FISH_VERSION") != "" || os.Getenv("__fish_bin_dir") != "" {
 		return "fish"
 	}

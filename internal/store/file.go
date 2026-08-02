@@ -1,9 +1,9 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/SaDMikaSa/UPass/internal/common"
 	"github.com/SaDMikaSa/UPass/internal/crypto"
@@ -12,14 +12,9 @@ import (
 )
 
 func Save(filename string, vault domain.Vault, password []byte) error {
-	if _, err := os.Stat(filename); err == nil {
-		config := DefaultBackupConfig()
-		if backupErr := CreateBackup(filename, config); backupErr != nil {
-			return fmt.Errorf("failed to create pre-write backup: %w", backupErr)
-		}
-	}
+	lockPath := filename + ".lock"
+	lock := flock.New(lockPath)
 
-	lock := flock.New(filename)
 	locked, err := lock.TryLock()
 	if err != nil {
 		return err
@@ -29,7 +24,14 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 	}
 	defer lock.Unlock()
 
-	data, err := json.Marshal(vault)
+	if _, err := os.Stat(filename); err == nil {
+		config := DefaultBackupConfig()
+		if backupErr := CreateBackup(filename, config); backupErr != nil {
+			return fmt.Errorf("failed to create pre-write backup: %w", backupErr)
+		}
+	}
+
+	data, err := marshalVaultBinary(vault.Records)
 	if err != nil {
 		return err
 	}
@@ -55,17 +57,35 @@ func Save(filename string, vault domain.Vault, password []byte) error {
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 
+	if dir, err := os.Open(filepath.Dir(filename)); err == nil {
+		_ = dir.Sync()
+		dir.Close()
+	}
+
 	return nil
 }
 
-// Load reads and decrypts the vault file at filename using password and
-// returns the parsed Vault structure. It obtains a shared file lock during
-// the read and returns ErrNotFound when the file does not exist.
 func Load(filename string, password []byte) (domain.Vault, error) {
 	var vault domain.Vault
 
-	lock := flock.New(filename)
-	locked, err := lock.TryLock()
+	info, err := os.Stat(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return vault, common.ErrNotFound
+		}
+		return vault, common.ErrReadVaultFile
+	}
+
+	if info.Mode().Perm()&0077 != 0 {
+		return vault, fmt.Errorf("FATAL: vault file has insecure permissions: %o (expected 0600). "+
+			"Other users on this system might be able to read it. "+
+			"Please fix permissions manually: chmod 600 %s", info.Mode().Perm(), filename)
+	}
+
+	lockPath := filename + ".lock"
+	lock := flock.New(lockPath)
+
+	locked, err := lock.TryRLock()
 	if err != nil {
 		return vault, err
 	}
@@ -89,7 +109,7 @@ func Load(filename string, password []byte) (domain.Vault, error) {
 		return vault, err
 	}
 
-	err = json.Unmarshal(data, &vault)
+	vault.Records, err = unmarshalVaultBinary(data)
 	if err != nil {
 		return vault, err
 	}

@@ -29,7 +29,7 @@ func GetVaultsDir() string {
 		return ""
 	}
 	dir := filepath.Join(home, ".upass", "vaults")
-	_ = os.MkdirAll(dir, 0700) // Создаем при запросе
+	_ = os.MkdirAll(dir, 0700)
 	return dir
 }
 

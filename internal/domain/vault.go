@@ -29,23 +29,6 @@ func cloneRecord(src Record) Record {
 	return dst
 }
 
-// Add inserts a new Record into the Vault. Service names are stored in
-// lowercase, and duplicates return common.ErrDuplicate.
-func Add(vault Vault, record Record) (Vault, error) {
-	key := strings.ToLower(string(record.Service))
-
-	if vault.Records == nil {
-		vault.Records = make(map[string]Record)
-	}
-
-	if _, exists := vault.Records[key]; exists {
-		return Vault{}, common.ErrDuplicate
-	}
-
-	vault.Records[key] = cloneRecord(record)
-	return vault, nil
-}
-
 // Search looks up a Record by service name (case-insensitive) and returns a
 // cloned copy to preserve the original data in the vault map.
 func Search(vault Vault, service []byte) (Record, error) {
@@ -59,33 +42,58 @@ func Search(vault Vault, service []byte) (Record, error) {
 	return cloneRecord(rec), nil
 }
 
-// Delete removes the record for the specified service from the vault
-// and zeroes the memory used by the record fields before deletion.
+func Add(vault Vault, record Record) (Vault, error) {
+	key := strings.ToLower(string(record.Service))
+	if _, exists := vault.Records[key]; exists {
+		return Vault{}, common.ErrDuplicate
+	}
+
+	newRecords := make(map[string]Record, len(vault.Records)+1)
+	for k, v := range vault.Records {
+		newRecords[k] = cloneRecord(v)
+	}
+
+	newRecords[key] = cloneRecord(record)
+
+	return Vault{
+		Records:             newRecords,
+		EncryptedMasterPass: vault.EncryptedMasterPass,
+	}, nil
+}
+
 func Delete(vault Vault, service []byte) (Vault, error) {
 	key := strings.ToLower(string(service))
-
-	rec, exists := vault.Records[key]
+	_, exists := vault.Records[key]
 	if !exists {
 		return Vault{}, common.ErrNotFound
 	}
 
-	common.ZeroBytes(rec.Service)
-	common.ZeroBytes(rec.Login)
-	common.ZeroBytes(rec.Password)
-	common.ZeroBytes(rec.Note)
+	orig := vault.Records[key]
+	common.ZeroBytes(orig.Service)
+	common.ZeroBytes(orig.Login)
+	common.ZeroBytes(orig.Password)
+	common.ZeroBytes(orig.Note)
 
-	delete(vault.Records, key)
-	return vault, nil
+	vault.Records[key] = orig
+
+	newRecords := make(map[string]Record, len(vault.Records)-1)
+	for k, v := range vault.Records {
+		if k != key {
+			newRecords[k] = cloneRecord(v)
+		}
+	}
+
+	return Vault{
+		Records:             newRecords,
+		EncryptedMasterPass: vault.EncryptedMasterPass,
+	}, nil
 }
 
-// Edit updates an existing record identified by service. If the service key
-// changes (rename), it ensures the new key does not collide with an existing
-// record. The old record bytes are zeroed before being replaced.
 func Edit(vault Vault, service []byte, newRecord Record) (Vault, error) {
 	oldKey := strings.ToLower(string(service))
 	newKey := strings.ToLower(string(newRecord.Service))
 
-	oldRec, exists := vault.Records[oldKey]
+	_, exists := vault.Records[oldKey]
 	if !exists {
 		return Vault{}, common.ErrNotFound
 	}
@@ -96,15 +104,24 @@ func Edit(vault Vault, service []byte, newRecord Record) (Vault, error) {
 		}
 	}
 
+	oldRec := vault.Records[oldKey]
 	common.ZeroBytes(oldRec.Service)
 	common.ZeroBytes(oldRec.Login)
 	common.ZeroBytes(oldRec.Password)
 	common.ZeroBytes(oldRec.Note)
+	vault.Records[oldKey] = oldRec
 
-	if oldKey != newKey {
-		delete(vault.Records, oldKey)
+	newRecords := make(map[string]Record, len(vault.Records))
+	for k, v := range vault.Records {
+		if k != oldKey {
+			newRecords[k] = cloneRecord(v)
+		}
 	}
 
-	vault.Records[newKey] = cloneRecord(newRecord)
-	return vault, nil
+	newRecords[newKey] = cloneRecord(newRecord)
+
+	return Vault{
+		Records:             newRecords,
+		EncryptedMasterPass: vault.EncryptedMasterPass,
+	}, nil
 }

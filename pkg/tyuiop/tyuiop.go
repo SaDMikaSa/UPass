@@ -1,60 +1,80 @@
 package tyuiop
 
-import (
-	"context"
-	"fmt"
-	"math"
-	"time"
-)
+func AnalyzeBytes(data []byte) *PasswordStats {
+	var stats PasswordStats
+	stats.Length = len(data)
 
-func EstimateStrength(data []byte, pwnedChecker PwnedChecker) *PasswordStrength {
-	stats := AnalyzeBytes(data)
-	repeats := findRepeats(data)
-	keyboard := findKeyboardPatterns(data)
+	var seen [256]bool
+	uniqueCount := 0
+	maxRepeat := 0
+	currentRepeat := 1
 
-	patterns := append(repeats, keyboard...)
+	for i := 0; i < len(data); i++ {
+		b := data[i]
+		switch {
+		case b >= '0' && b <= '9':
+			stats.Digits++
+		case b >= 'a' && b <= 'z':
+			stats.Lowers++
+		case b >= 'A' && b <= 'Z':
+			stats.Uppers++
+		default:
+			stats.Specials++
+		}
 
-	possibleChars := calculatePossibleChars(stats)
-	length := stats.Length
+		if !seen[b] {
+			seen[b] = true
+			uniqueCount++
+		}
 
-	baseGuesses := math.Pow(float64(possibleChars), float64(length))
-	finalGuesses := applyPenalties(baseGuesses, patterns, stats)
-
-	score := calculateScore(finalGuesses)
-	crackTime := calculateCrackTime(finalGuesses)
-	feedback := generateFeedback(stats, patterns, score)
-
-	var pwnedResult *PwnedCheckResult
-	if pwnedChecker != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		pwnedResult, _ = pwnedChecker.CheckPassword(ctx, data)
-	}
-
-	if pwnedResult != nil && pwnedResult.IsPwned {
-		score = 0
-		finalGuesses = 1
-		feedback := generateFeedback(stats, patterns, score)
-		feedback.Warning = fmt.Sprintf("Password found in data breaches (%d times)", pwnedResult.BreachCount)
-		feedback.Suggestions = append(feedback.Suggestions, "Use a unique password that you haven't used on other sites")
-
-		return &PasswordStrength{
-			Score:     0,
-			Guesses:   1,
-			CrackTime: "instantly",
-			Patterns:  patterns,
-			Stats:     stats,
-			Feedback:  feedback,
+		if i > 0 && b == data[i-1] {
+			currentRepeat++
+			if currentRepeat > maxRepeat {
+				maxRepeat = currentRepeat
+			}
+		} else {
+			currentRepeat = 1
 		}
 	}
 
+	stats.UniqueChar = uniqueCount
+	stats.MaxRepeat = maxRepeat
+	return &stats
+}
+
+func AnalyzeLocalStrength(data []byte) *PasswordStrength {
+	if len(data) == 0 {
+		return &PasswordStrength{Score: 0, CrackTime: "instantly", CrackSeconds: 0, Stats: &PasswordStats{}}
+	}
+
+	if !ValidateASCIIOnly(data) {
+		return &PasswordStrength{Score: 0, CrackTime: "instantly", CrackSeconds: 0, Stats: &PasswordStats{}}
+	}
+
+	stats := AnalyzeBytes(data)
+
+	patterns := findRepeats(data)
+	patterns = append(patterns, findKeyboardPatterns(data)...)
+	patterns = append(patterns, findCombinedPatterns(data)...)
+
+	if common := findCommonPassword(data); common != nil {
+		patterns = append(patterns, *common)
+	}
+
+	finalGuesses := calculateEntropy(data, patterns, stats)
+
+	score := calculateScore(finalGuesses)
+	crackTime, crackSeconds := calculateCrackTimeWithSeconds(finalGuesses, "bcrypt")
+	feedback := generateFeedback(stats, patterns, score)
+
 	return &PasswordStrength{
-		Score:     score,
-		Guesses:   finalGuesses,
-		CrackTime: crackTime,
-		Patterns:  patterns,
-		Stats:     stats,
-		Feedback:  feedback,
+		Score:        score,
+		Guesses:      finalGuesses,
+		CrackTime:    crackTime,
+		CrackSeconds: crackSeconds,
+		Patterns:     patterns,
+		Stats:        stats,
+		Feedback:     feedback,
 	}
 }
 

@@ -46,8 +46,6 @@ func TestDecryptCorruptedData(t *testing.T) {
 	pw := []byte("password")
 
 	ct, _ := Encrypt(pt, pw, nil)
-
-	// Повреждаем байт в шифротексте (последние байты - это ciphertext)
 	ct[len(ct)-5] ^= 0xFF
 
 	_, _, err := Decrypt(ct, pw)

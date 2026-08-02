@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,21 +53,23 @@ var destroyCmd = &cobra.Command{
 
 		fmt.Println()
 		common.RedPrintln("⚠️  This action CANNOT be undone. All passwords will be lost.")
+		common.YellowPrintln("NOTE: On modern SSDs and CoW filesystems, overwriting a file does NOT guarantee physical destruction of old data.")
+		common.YellowPrintln("For absolute security, ensure your drive is protected by Full-Disk Encryption (FDE) before using this command.")
 		fmt.Println()
 
-		fmt.Print("Type 'Destroy' to confirm: ")
+		fmt.Print("Type 'DESTROY' to confirm: ")
 		confirmation, err := readLine()
 		if err != nil {
 			return err
 		}
-		if confirmation != "Destroy" {
+		if confirmation != "DESTROY" {
 			common.RedPrintln("Cancelled. Vault is intact.")
 			return nil
 		}
 
 		common.YellowPrintln("⚠️  Overwriting a file does not guarantee physical destruction of old data.")
 		common.YellowPrintln("For absolute security, use Full-Disk Encryption (FDE) and hardware secure erase tools.")
-		if err := tmpDelete(vaultPath); err != nil {
+		if err := pathDelete(vaultPath); err != nil {
 			return fmt.Errorf("delete vault: %w", err)
 		}
 
@@ -101,11 +102,8 @@ func getExpectedBinPath(home string) string {
 	return filepath.Join(home, ".local", "bin", "upass")
 }
 
-// tmpDelete performs a best-effort secure deletion of a file.
-// It overwrites the file with cryptographically secure random data,
-// then with zeros, forcing a disk sync after each pass before removal.
-func tmpDelete(path string) error {
-	info, err := os.Stat(path)
+func pathDelete(path string) error {
+	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -113,39 +111,9 @@ func tmpDelete(path string) error {
 		return err
 	}
 
-	size := info.Size()
-	if size == 0 {
-		return os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("failed to remove file: %w", err)
 	}
 
-	f, err := os.OpenFile(path, os.O_RDWR, 0600)
-	if err != nil {
-		_ = os.Remove(path)
-		return err
-	}
-
-	randomData := make([]byte, size)
-	if _, err := rand.Read(randomData); err == nil {
-		if _, err := f.WriteAt(randomData, 0); err != nil {
-			_ = os.Remove(path)
-			return err
-		}
-		if err := f.Sync(); err != nil {
-			_ = os.Remove(path)
-			return err
-		}
-	}
-
-	zeroData := make([]byte, size)
-	if _, err := f.WriteAt(zeroData, 0); err != nil {
-		_ = os.Remove(path)
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = os.Remove(path)
-		return err
-	}
-
-	f.Close()
-	return os.Remove(path)
+	return nil
 }

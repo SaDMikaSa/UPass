@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -94,7 +95,7 @@ func importFromCSV(filepath string, password []byte) error {
 	for {
 		row, err := reader.Read()
 		if err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return fmt.Errorf("failed to read CSV row: %w", err)
@@ -126,57 +127,27 @@ func processImportRecords(records []domain.Record, password []byte) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d records to import. Processing...\n", len(records))
+	fmt.Printf("Found %d records to import. Processing in batch...\n", len(records))
 
-	successCount := 0
-	skipCount := 0
-	errorCount := 0
-
-	for i := range records {
-		rec := records[i]
-
-		serviceName := string(rec.Service)
-
-		if len(rec.Service) == 0 || len(rec.Login) == 0 {
-			skipCount++
-			common.ZeroBytes(rec.Service)
-			common.ZeroBytes(rec.Login)
-			common.ZeroBytes(rec.Password)
-			common.ZeroBytes(rec.Note)
-			continue
-		}
-
-		err := vaultService.AddRecord(rec, password)
-
-		common.ZeroBytes(rec.Service)
-		common.ZeroBytes(rec.Login)
-		common.ZeroBytes(rec.Password)
-		common.ZeroBytes(rec.Note)
-
-		if err != nil {
-			if errors.Is(err, common.ErrDuplicate) {
-				fmt.Printf("  [SKIP] %s (already exists)\n", serviceName)
-				skipCount++
-			} else {
-				fmt.Printf("  [ERROR] %s: %v\n", serviceName, err)
-				errorCount++
-			}
-			continue
-		}
-
-		successCount++
+	success, skip, err := vaultService.AddRecordsBatch(records, password)
+	if err != nil {
+		return fmt.Errorf("batch import failed: %w", err)
 	}
 
 	saveServicesCache(vaultService.ListServices())
 
 	fmt.Println()
 	common.GreenPrintln("Import completed!")
-	fmt.Printf("Successfully imported: %d\n", successCount)
-	if skipCount > 0 {
-		fmt.Printf("Skipped (empty or duplicates): %d\n", skipCount)
+	fmt.Printf("Successfully imported: %d\n", success)
+	if skip > 0 {
+		fmt.Printf("Skipped (empty or duplicates): %d\n", skip)
 	}
-	if errorCount > 0 {
-		fmt.Printf("Errors: %d\n", errorCount)
+
+	for i := range records {
+		common.ZeroBytes(records[i].Password)
+		common.ZeroBytes(records[i].Login)
+		common.ZeroBytes(records[i].Note)
+		common.ZeroBytes(records[i].Service)
 	}
 
 	return nil

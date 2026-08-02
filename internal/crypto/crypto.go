@@ -16,7 +16,8 @@ func DeriveKey(password []byte, salt []byte) ([]byte, error) {
 	key := argon2.IDKey(password, salt, common.Argon2Time, common.Argon2Memory, common.Argon2Threads, 32)
 
 	if err := common.LockMemory(key); err != nil {
-		fmt.Printf("Warning: could not lock memory for derived key: %v\n", err)
+		common.ZeroBytes(key)
+		return nil, fmt.Errorf("could not lock memory for derived key: %w", err)
 	}
 
 	return key, nil
@@ -112,6 +113,7 @@ func Decrypt(fullData []byte, password []byte) (plaintext []byte, encryptedMaste
 	}
 
 	version := fullData[4]
+
 	// TODO: MIGRATION
 
 	// type Migration func(data []byte) ([]byte, error)
@@ -122,6 +124,13 @@ func Decrypt(fullData []byte, password []byte) (plaintext []byte, encryptedMaste
 	fileTime := fullData[5]
 	fileMemory := binary.BigEndian.Uint32(fullData[6:10])
 	empLen := binary.BigEndian.Uint16(fullData[10:12])
+
+	if uint32(fileTime) < common.Argon2Time {
+		return nil, nil, fmt.Errorf("security check failed: KDF time parameter (%d) is below minimum required (%d). File may be tampered", fileTime, common.Argon2Time)
+	}
+	if fileMemory < common.Argon2Memory {
+		return nil, nil, fmt.Errorf("security check failed: KDF memory parameter (%d) is below minimum required (%d). File may be tampered", fileMemory, common.Argon2Memory)
+	}
 
 	var emp []byte
 	offset := common.BaseHeaderSize

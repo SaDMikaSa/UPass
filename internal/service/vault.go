@@ -12,6 +12,7 @@ import (
 	"github.com/SaDMikaSa/UPass/internal/crypto"
 	"github.com/SaDMikaSa/UPass/internal/domain"
 	"github.com/SaDMikaSa/UPass/internal/store"
+	"github.com/gofrs/flock"
 )
 
 type VaultService struct {
@@ -29,17 +30,48 @@ func NewVaultService(filename string) *VaultService {
 	}
 }
 
-// Unlock loads and decrypts the vault stored at the service's filename
-// using the provided master password. On success the service becomes unlocked
-// and ready for record operations.
 func (s *VaultService) Unlock(password []byte) error {
 	vault, err := store.Load(s.filename, password)
 	if err != nil {
 		return fmt.Errorf("unlock failed: %w", err)
 	}
+
+	for key := range vault.Records {
+		rec := vault.Records[key]
+		_ = common.LockMemory(rec.Login)
+		_ = common.LockMemory(rec.Password)
+		_ = common.LockMemory(rec.Note)
+		vault.Records[key] = rec
+	}
+
 	s.vault = vault
 	s.unlocked = true
 	return nil
+}
+
+func (s *VaultService) Close() {
+	if !s.unlocked {
+		return
+	}
+
+	for key := range s.vault.Records {
+		rec := s.vault.Records[key]
+		common.ZeroBytes(rec.Login)
+		common.ZeroBytes(rec.Password)
+		common.ZeroBytes(rec.Note)
+
+		_ = common.UnlockMemory(rec.Login)
+		_ = common.UnlockMemory(rec.Password)
+		_ = common.UnlockMemory(rec.Note)
+	}
+
+	if s.vault.EncryptedMasterPass != nil {
+		common.ZeroBytes(s.vault.EncryptedMasterPass)
+	}
+
+	s.vault.Records = nil
+	s.vault.EncryptedMasterPass = nil
+	s.unlocked = false
 }
 
 // AddRecord adds a new password record to the unlocked vault and persists
@@ -183,11 +215,23 @@ func (s *VaultService) RecoverVault(encodedKey []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	lockPath := s.filename + ".lock"
+	lock := flock.New(lockPath)
+
+	locked, err := lock.TryRLock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire read lock: %w", err)
+	}
+	if !locked {
+		return nil, common.ErrVaultLockedByAnother
+	}
+	defer lock.Unlock()
+
 	fullData, err := os.ReadFile(s.filename)
-	defer common.ZeroBytes(fullData)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", common.ErrReadVaultFile, err)
 	}
+	defer common.ZeroBytes(fullData)
 
 	if len(fullData) < common.BaseHeaderSize {
 		return nil, fmt.Errorf("file too short")
@@ -209,7 +253,6 @@ func (s *VaultService) RecoverVault(encodedKey []byte) ([]byte, error) {
 	encryptedMaster := fullData[offset : offset+int(empLen)]
 
 	masterPassword, err := crypto.DecryptMasterPassword(encryptedMaster, recoveryKey)
-	defer common.ZeroBytes(masterPassword)
 	if err != nil {
 		return nil, err
 	}
@@ -344,14 +387,66 @@ func (s *VaultService) DropRecoveryAndChangePassword(newPassword []byte) error {
 		return common.ErrLocked
 	}
 
-	if len(s.vault.EncryptedMasterPass) > 0 {
-		common.ZeroBytes(s.vault.EncryptedMasterPass)
-		s.vault.EncryptedMasterPass = nil
-	}
+	vaultToSave := s.vault
 
-	if err := store.Save(s.filename, s.vault, newPassword); err != nil {
+	vaultToSave.EncryptedMasterPass = nil
+
+	if err := store.Save(s.filename, vaultToSave, newPassword); err != nil {
 		return fmt.Errorf("save after password change: %w", err)
 	}
 
+	if len(s.vault.EncryptedMasterPass) > 0 {
+		common.ZeroBytes(s.vault.EncryptedMasterPass)
+	}
+	s.vault.EncryptedMasterPass = nil
+
 	return nil
+}
+
+func (s *VaultService) AddRecordsBatch(records []domain.Record, password []byte) (success, skip int, err error) {
+	if !s.unlocked {
+		return 0, 0, common.ErrLocked
+	}
+
+	newRecords := make(map[string]domain.Record, len(s.vault.Records)+len(records))
+	for k, v := range s.vault.Records {
+		newRecords[k] = v
+	}
+
+	for _, rec := range records {
+		if len(rec.Service) == 0 || len(rec.Login) == 0 {
+			skip++
+			continue
+		}
+
+		key := strings.ToLower(string(rec.Service))
+		if _, exists := newRecords[key]; exists {
+			skip++
+			continue
+		}
+
+		newRecords[key] = domain.Record{
+			Service:  append([]byte(nil), rec.Service...),
+			Login:    append([]byte(nil), rec.Login...),
+			Password: append([]byte(nil), rec.Password...),
+			Note:     append([]byte(nil), rec.Note...),
+		}
+		success++
+	}
+
+	if success == 0 {
+		return 0, skip, nil
+	}
+
+	vaultToSave := domain.Vault{
+		Records:             newRecords,
+		EncryptedMasterPass: s.vault.EncryptedMasterPass,
+	}
+
+	if err := store.Save(s.filename, vaultToSave, password); err != nil {
+		return 0, 0, fmt.Errorf("save batch: %w", err)
+	}
+
+	s.vault.Records = newRecords
+	return success, skip, nil
 }

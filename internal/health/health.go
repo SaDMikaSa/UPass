@@ -2,6 +2,7 @@ package health
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
@@ -10,20 +11,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SaDMikaSa/UPass/internal/domain"
 	"github.com/SaDMikaSa/UPass/pkg/tyuiop"
+	"golang.org/x/sync/errgroup"
 )
-
-var client = &http.Client{
-	Timeout: 10 * time.Second,
-	Transport: &http.Transport{
-		MaxIdleConns:       10,
-		IdleConnTimeout:    10 * time.Second,
-		DisableCompression: false,
-	},
-}
 
 type WeakPasswordResult struct {
 	Service      string
@@ -44,6 +39,16 @@ type BreachedResult struct {
 type ReusedLogin struct {
 	Login    string
 	Services []string
+}
+
+var hibpClient = &http.Client{
+	Timeout: 15 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  false,
+	},
 }
 
 func CheckWeakPasswords(records map[string]domain.Record, minScore int) []WeakPasswordResult {
@@ -94,13 +99,8 @@ func CheckDuplicatePasswords(records map[string]domain.Record) []DuplicateGroup 
 	return duplicates
 }
 
-// fetchHIBPRange queries the Have I Been Pwned password range API for the
-// given 5-character hex prefix and returns the raw body. The caller is
-// responsible for parsing the response. The request sets Add-Padding:true for
-// additional privacy and uses a short timeout.
 func fetchHIBPRange(prefix string) ([]byte, error) {
 	url := "https://api.pwnedpasswords.com/range/" + prefix
-
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -108,21 +108,23 @@ func fetchHIBPRange(prefix string) ([]byte, error) {
 	req.Header.Set("Add-Padding", "true")
 	req.Header.Set("User-Agent", "UPass-CLI")
 
-	resp, err := client.Do(req)
+	resp, err := hibpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("hibp request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, fmt.Errorf("HIBP rate limit exceeded (429)")
+	}
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("hibp status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
-
 	return body, nil
 }
 
@@ -163,9 +165,6 @@ func CheckBreached(password []byte) (int, error) {
 	return searchSuffixInResponse(body, suffix), nil
 }
 
-// CheckAllBreached performs HIBP checks for all records in the vault.
-// It groups passwords by the SHA‑1 prefix to minimize the number of network
-// requests (k-anonymity) and returns a list of breached services with counts.
 func CheckAllBreached(records map[string]domain.Record) ([]BreachedResult, error) {
 	type recordInfo struct {
 		service string
@@ -173,42 +172,66 @@ func CheckAllBreached(records map[string]domain.Record) ([]BreachedResult, error
 	}
 
 	prefixGroups := make(map[string][]recordInfo)
-
 	for _, rec := range records {
 		hash := sha1.Sum(rec.Password)
 		hashStr := fmt.Sprintf("%X", hash)
 		prefix := hashStr[:5]
 		suffix := hashStr[5:]
-
 		prefixGroups[prefix] = append(prefixGroups[prefix], recordInfo{
 			service: string(rec.Service),
 			suffix:  suffix,
 		})
 	}
 
-	var results []BreachedResult
-	apiFailedCount := 0
-
-	for prefix, infos := range prefixGroups {
-		body, err := fetchHIBPRange(prefix)
-		if err != nil {
-			apiFailedCount++
-			continue
-		}
-
-		for _, info := range infos {
-			count := searchSuffixInResponse(body, info.suffix)
-			if count > 0 {
-				results = append(results, BreachedResult{
-					Service: info.service,
-					Count:   count,
-				})
-			}
-		}
+	if len(prefixGroups) == 0 {
+		return nil, nil
 	}
 
-	if apiFailedCount == len(prefixGroups) && len(prefixGroups) > 0 {
-		return nil, fmt.Errorf("HIBP API is currently unavailable")
+	var results []BreachedResult
+	var mu sync.Mutex
+	var apiFailedCount int32
+
+	g, ctx := errgroup.WithContext(context.Background())
+	g.SetLimit(10)
+
+	for prefix, infos := range prefixGroups {
+		p := prefix
+		i := infos
+
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			body, err := fetchHIBPRange(p)
+			if err != nil {
+				atomic.AddInt32(&apiFailedCount, 1)
+				return nil
+			}
+
+			for _, info := range i {
+				count := searchSuffixInResponse(body, info.suffix)
+				if count > 0 {
+					mu.Lock()
+					results = append(results, BreachedResult{
+						Service: info.service,
+						Count:   count,
+					})
+					mu.Unlock()
+				}
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	if int(apiFailedCount) == len(prefixGroups) {
+		return nil, fmt.Errorf("HIBP API is currently unavailable (all %d requests failed)", len(prefixGroups))
 	}
 
 	sort.Slice(results, func(i, j int) bool {

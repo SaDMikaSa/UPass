@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -105,15 +106,15 @@ func EncodeRecoveryKey(key []byte) string {
 	return base64.StdEncoding.EncodeToString(key)
 }
 
-// DecodeRecoveryKey decodes a base64 encoded recovery key and validates its
-// length.
 func DecodeRecoveryKey(encoded []byte) ([]byte, error) {
+	encoded = bytes.TrimSpace(encoded)
+
 	key, err := base64.StdEncoding.DecodeString(string(encoded))
 	if err != nil {
 		return nil, fmt.Errorf("invalid recovery key format")
 	}
 	if len(key) != 32 {
-		return nil, fmt.Errorf("recovery key must be 32 bytes")
+		return nil, fmt.Errorf("recovery key must be 32 bytes, got %d", len(key))
 	}
 	return key, nil
 }
